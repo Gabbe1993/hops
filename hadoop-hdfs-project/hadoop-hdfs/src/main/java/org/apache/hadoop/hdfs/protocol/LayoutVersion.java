@@ -67,7 +67,7 @@ public class LayoutVersion {
    * </li>
    * </ul>
    */
-  public static enum Feature {
+  public enum Feature {
     NAMESPACE_QUOTA(-16, "Support for namespace quotas"),
     FILE_ACCESS_TIME(-17, "Support for access time on files"),
     DISKSPACE_QUOTA(-18, "Support for disk space quotas"),
@@ -100,8 +100,14 @@ public class LayoutVersion {
         "Serialize block lists with delta-encoded variable length ints, " +
             "add OP_UPDATE_BLOCKS"),
     ADD_DATANODE_AND_STORAGE_UUIDS(-41, "Replace StorageID with DatanodeUuid."
-        + " Use distinct StorageUuid per storage directory.");
-    
+        + " Use distinct StorageUuid per storage directory."),
+    BLOCKID_BASED_LAYOUT(-56,
+            "The block ID of a finalized block uniquely determines its position " +
+                    "in the directory structure"),
+    BLOCKID_BASED_LAYOUT_32_by_32(-57,
+            "Identical to the block id based layout (-56) except it uses a smaller"
+                    + " directory structure (32x32)");
+
     final int lv;
     final int ancestorLV;
     final String description;

@@ -59,17 +59,17 @@ import java.util.regex.Pattern;
  */
 @InterfaceAudience.Private
 public class BlockPoolSliceStorage extends Storage {
+
+  private static final String BLOCK_POOL_ID_PATTERN_BASE =
+          Pattern.quote(File.separator) +
+                  "BP-\\d+-\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}-\\d+" +
+                  Pattern.quote(File.separator);
+
   private static final Pattern BLOCK_POOL_PATH_PATTERN = Pattern.compile(
           "^(.*)(" + BLOCK_POOL_ID_PATTERN_BASE + ")(.*)$");
 
   private static final Pattern BLOCK_POOL_CURRENT_PATH_PATTERN = Pattern.compile(
           "^(.*)(" + BLOCK_POOL_ID_PATTERN_BASE + ")(" + STORAGE_DIR_CURRENT + ")(.*)$");
-
-  private static final Pattern BLOCK_POOL_TRASH_PATH_PATTERN = Pattern.compile(
-          "^(.*)(" + BLOCK_POOL_ID_PATTERN_BASE + ")(" + TRASH_ROOT_DIR + ")(.*)$");
-
-          "^(.*)" +
-                  "(\\/BP-[0-9]+\\-\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\-[0-9]+\\/.*)$");
 
   private String blockpoolID = ""; // id of the blockpool
 
@@ -336,7 +336,7 @@ public class BlockPoolSliceStorage extends Storage {
     }
     if (this.layoutVersion > HdfsConstants.LAYOUT_VERSION ||
             this.cTime < nsInfo.getCTime()) {
-      doUpgrade(sd, nsInfo); // upgrade
+      doUpgrade(sd, nsInfo, conf); // upgrade
       return true;
     }
     // layoutVersion == LAYOUT_VERSION && this.cTime > nsInfo.cTime
@@ -370,7 +370,7 @@ public class BlockPoolSliceStorage extends Storage {
    * @throws IOException
    *     on error
    */
-  void doUpgrade(StorageDirectory bpSd, NamespaceInfo nsInfo)
+  void doUpgrade(StorageDirectory bpSd, NamespaceInfo nsInfo, Configuration conf)
           throws IOException {
     // Upgrading is applicable only to release with federation or after
     if (!LayoutVersion.supports(Feature.FEDERATION, layoutVersion)) {
@@ -415,7 +415,7 @@ public class BlockPoolSliceStorage extends Storage {
     rename(bpCurDir, bpTmpDir);
 
     // 3. Create new <SD>/current with block files hardlinks and VERSION
-    linkAllBlocks(bpTmpDir, bpCurDir);
+    linkAllBlocks(bpTmpDir, bpCurDir, oldLV, conf);
     this.layoutVersion = HdfsConstants.LAYOUT_VERSION;
     assert this.namespaceID == nsInfo
             .getNamespaceID() : "Data-node and name-node layout versions must be the same.";
@@ -515,6 +515,9 @@ public class BlockPoolSliceStorage extends Storage {
    * that holds the snapshot.
    */
   void doFinalize(File dnCurDir) throws IOException {
+    if (dnCurDir == null) {
+      return; //we do nothing if the directory is null
+    }
     File bpRoot = getBpRoot(blockpoolID, dnCurDir);
     StorageDirectory bpSd = new StorageDirectory(bpRoot);
     // block pool level previous directory
@@ -554,25 +557,21 @@ public class BlockPoolSliceStorage extends Storage {
   /**
    * Hardlink all finalized and RBW blocks in fromDir to toDir
    *
-   * @param fromDir
-   *     directory where the snapshot is stored
-   * @param toDir
-   *     the current data directory
-   * @throws IOException
-   *     if error occurs during hardlink
+   * @param fromDir directory where the snapshot is stored
+   * @param toDir the current data directory
+   * @throws IOException if error occurs during hardlink
    */
-  private void linkAllBlocks(File fromDir, File toDir) throws IOException {
+  private static void linkAllBlocks(File fromDir, File toDir,
+      int diskLayoutVersion, Configuration conf) throws IOException {
     // do the link
-    int diskLayoutVersion = this.getLayoutVersion();
     // hardlink finalized blocks in tmpDir
     HardLink hardLink = new HardLink();
-    DataStorage.linkBlocks(new File(fromDir, DataStorage.STORAGE_DIR_FINALIZED),
-            new File(toDir, DataStorage.STORAGE_DIR_FINALIZED), diskLayoutVersion,
-            hardLink);
-    DataStorage.linkBlocks(new File(fromDir, DataStorage.STORAGE_DIR_RBW),
-            new File(toDir, DataStorage.STORAGE_DIR_RBW), diskLayoutVersion,
-            hardLink);
-    LOG.info(hardLink.linkStats.report());
+    DataStorage.linkBlocks(fromDir, toDir, DataStorage.STORAGE_DIR_FINALIZED,
+            diskLayoutVersion, hardLink, conf);
+    DataStorage.linkBlocks(fromDir, toDir, DataStorage.STORAGE_DIR_RBW,
+            diskLayoutVersion, hardLink, conf);
+    LOG.info("Linked blocks from " + fromDir + " to " + toDir + ". "
+            + hardLink.linkStats.report());
   }
 
   /**

@@ -87,7 +87,7 @@ class BlockPoolSlice {
     //
     this.tmpDir = new File(bpDir, DataStorage.STORAGE_DIR_TMP);
     if (tmpDir.exists()) {
-      FileUtil.fullyDelete(tmpDir);
+      fileIoProvider.fullyDelete(volume, tmpDir);
     }
     this.rbwDir = new File(currentDir, DataStorage.STORAGE_DIR_RBW);
     final boolean supportAppends =
@@ -99,7 +99,7 @@ class BlockPoolSlice {
     final int maxBlocksPerDir =
         conf.getInt(DFSConfigKeys.DFS_DATANODE_NUMBLOCKS_KEY,
             DFSConfigKeys.DFS_DATANODE_NUMBLOCKS_DEFAULT);
-    this.finalizedDir = new LDir(finalizedDir, maxBlocksPerDir);
+
     if (!rbwDir.mkdirs()) {  // create rbw directory if not exist
       if (!rbwDir.isDirectory()) {
         throw new IOException("Mkdirs failed to create " + rbwDir.toString());
@@ -119,7 +119,7 @@ class BlockPoolSlice {
   }
 
   File getFinalizedDir() {
-    return finalizedDir.dir;
+    return finalizedDir;
   }
   
   File getRbwDir() {
@@ -176,26 +176,22 @@ class BlockPoolSlice {
    */
   File addFinalizedBlock(Block b, ReplicaInfo replicaInfo) throws IOException {
     File blockDir = DatanodeUtil.idToBlockDir(finalizedDir, b.getBlockId());
-    if (!blockDir.exists()) {
-      if (!blockDir.mkdirs()) {
-        throw new IOException("Failed to mkdirs " + blockDir);
-      }
-    }
-    File blockFile = FsDatasetImpl.moveBlockFiles(b, f, blockDir);
+    fileIoProvider.mkdirsWithExistsCheck(volume, blockDir);
+    File blockFile = FsDatasetImpl.moveBlockFiles(b, replicaInfo, blockDir);
     File metaFile = FsDatasetUtil.getMetaFile(blockFile, b.getGenerationStamp());
-    dfsUsage.incDfsUsed(b.getNumBytes()+metaFile.length());
+
     return blockFile;
   }
 
   void checkDirs() throws DiskErrorException {
-    DiskChecker.checkDirs(finalizedDir);
+    DiskChecker.checkDir(finalizedDir);
     DiskChecker.checkDir(tmpDir);
     DiskChecker.checkDir(rbwDir);
   }
 
   void getVolumeMap(ReplicaMap volumeMap) throws IOException {
     // add finalized replicas
-    finalizedDir.getVolumeMap(bpid, volumeMap, volume);
+    addToReplicasMap(volumeMap, finalizedDir, true);
     // add rbw replicas
     addToReplicasMap(volumeMap, rbwDir, false);
   }
@@ -349,9 +345,6 @@ class BlockPoolSlice {
     // TODO: GABRIEL - implement. Now returning first replica
 
     return replica1;
-  }
-  void clearPath(File f) {
-    finalizedDir.clearPath(f);
   }
 
   @Override

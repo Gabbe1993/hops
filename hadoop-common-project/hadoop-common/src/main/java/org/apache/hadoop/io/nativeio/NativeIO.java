@@ -100,7 +100,7 @@ public class NativeIO {
     private static boolean syncFileRangePossible = true;
 
     static final String WORKAROUND_NON_THREADSAFE_CALLS_KEY =
-      "hadoop.workaround.non.threadsafe.getpwuid";
+            "hadoop.workaround.non.threadsafe.getpwuid";
     static final boolean WORKAROUND_NON_THREADSAFE_CALLS_DEFAULT = true;
 
     private static long cacheTimeout = -1;
@@ -121,7 +121,7 @@ public class NativeIO {
     @VisibleForTesting
     public static class CacheManipulator {
       public void mlock(String identifier, ByteBuffer buffer,
-          long len) throws IOException {
+                        long len) throws IOException {
         POSIX.mlock(buffer, len);
       }
 
@@ -134,10 +134,10 @@ public class NativeIO {
       }
 
       public void posixFadviseIfPossible(String identifier,
-        FileDescriptor fd, long offset, long len, int flags)
-            throws NativeIOException {
+                                         FileDescriptor fd, long offset, long len, int flags)
+              throws NativeIOException {
         NativeIO.POSIX.posixFadviseIfPossible(identifier, fd, offset,
-            len, flags);
+                len, flags);
       }
 
       public boolean verifyCanMlock() {
@@ -153,7 +153,7 @@ public class NativeIO {
     @VisibleForTesting
     public static class NoMlockCacheManipulator extends CacheManipulator {
       public void mlock(String identifier, ByteBuffer buffer,
-          long len) throws IOException {
+                        long len) throws IOException {
         LOG.info("mlocking " + identifier);
       }
 
@@ -175,18 +175,18 @@ public class NativeIO {
         try {
           Configuration conf = new Configuration();
           workaroundNonThreadSafePasswdCalls = conf.getBoolean(
-            WORKAROUND_NON_THREADSAFE_CALLS_KEY,
-            WORKAROUND_NON_THREADSAFE_CALLS_DEFAULT);
+                  WORKAROUND_NON_THREADSAFE_CALLS_KEY,
+                  WORKAROUND_NON_THREADSAFE_CALLS_DEFAULT);
 
           initNative();
           nativeLoaded = true;
 
           cacheTimeout = conf.getLong(
-            CommonConfigurationKeys.HADOOP_SECURITY_UID_NAME_CACHE_TIMEOUT_KEY,
-            CommonConfigurationKeys.HADOOP_SECURITY_UID_NAME_CACHE_TIMEOUT_DEFAULT) *
-            1000;
+                  CommonConfigurationKeys.HADOOP_SECURITY_UID_NAME_CACHE_TIMEOUT_KEY,
+                  CommonConfigurationKeys.HADOOP_SECURITY_UID_NAME_CACHE_TIMEOUT_DEFAULT) *
+                  1000;
           LOG.debug("Initialized cache for IDs to User/Group mapping with a " +
-            " cache timeout of " + cacheTimeout/1000 + " seconds.");
+                  " cache timeout of " + cacheTimeout / 1000 + " seconds.");
 
         } catch (Throwable t) {
           // This can happen if the user has an older version of libhadoop.so
@@ -210,12 +210,19 @@ public class NativeIO {
       }
     }
 
-    /** Wrapper around open(2) */
+    /**
+     * Wrapper around open(2)
+     */
     public static native FileDescriptor open(String path, int flags, int mode) throws IOException;
-    /** Wrapper around fstat(2) */
+
+    /**
+     * Wrapper around fstat(2)
+     */
     private static native Stat fstat(FileDescriptor fd) throws IOException;
 
-    /** Native chmod implementation. On UNIX, it is a wrapper around chmod(2) */
+    /**
+     * Native chmod implementation. On UNIX, it is a wrapper around chmod(2)
+     */
     private static native void chmodImpl(String path, int mode) throws IOException;
 
     public static void chmod(String path, int mode) throws IOException {
@@ -227,23 +234,27 @@ public class NativeIO {
         } catch (NativeIOException nioe) {
           if (nioe.getErrorCode() == 3) {
             throw new NativeIOException("No such file or directory",
-                Errno.ENOENT);
+                    Errno.ENOENT);
           } else {
             LOG.warn(String.format("NativeIO.chmod error (%d): %s",
-                nioe.getErrorCode(), nioe.getMessage()));
+                    nioe.getErrorCode(), nioe.getMessage()));
             throw new NativeIOException("Unknown error", Errno.UNKNOWN);
           }
         }
       }
     }
 
-    /** Wrapper around posix_fadvise(2) */
+    /**
+     * Wrapper around posix_fadvise(2)
+     */
     static native void posix_fadvise(
-      FileDescriptor fd, long offset, long len, int flags) throws NativeIOException;
+            FileDescriptor fd, long offset, long len, int flags) throws NativeIOException;
 
-    /** Wrapper around sync_file_range(2) */
+    /**
+     * Wrapper around sync_file_range(2)
+     */
     static native void sync_file_range(
-      FileDescriptor fd, long offset, long nbytes, int flags) throws NativeIOException;
+            FileDescriptor fd, long offset, long nbytes, int flags) throws NativeIOException;
 
     /**
      * Call posix_fadvise on the given file descriptor. See the manpage
@@ -253,8 +264,8 @@ public class NativeIO {
      * @throws NativeIOException if there is an error with the syscall
      */
     static void posixFadviseIfPossible(String identifier,
-        FileDescriptor fd, long offset, long len, int flags)
-        throws NativeIOException {
+                                       FileDescriptor fd, long offset, long len, int flags)
+            throws NativeIOException {
       if (nativeLoaded && fadvisePossible) {
         try {
           posix_fadvise(fd, offset, len, flags);
@@ -272,8 +283,8 @@ public class NativeIO {
      * @throws NativeIOException if there is an error with the syscall
      */
     public static void syncFileRangeIfPossible(
-        FileDescriptor fd, long offset, long nbytes, int flags)
-        throws NativeIOException {
+            FileDescriptor fd, long offset, long nbytes, int flags)
+            throws NativeIOException {
       if (nativeLoaded && syncFileRangePossible) {
         try {
           sync_file_range(fd, offset, nbytes, flags);
@@ -286,29 +297,29 @@ public class NativeIO {
     }
 
     static native void mlock_native(
-        ByteBuffer buffer, long len) throws NativeIOException;
+            ByteBuffer buffer, long len) throws NativeIOException;
 
     /**
      * Locks the provided direct ByteBuffer into memory, preventing it from
      * swapping out. After a buffer is locked, future accesses will not incur
      * a page fault.
-     * 
+     * <p>
      * See the mlock(2) man page for more information.
-     * 
+     *
      * @throws NativeIOException
      */
     static void mlock(ByteBuffer buffer, long len)
-        throws IOException {
+            throws IOException {
       assertCodeLoaded();
       if (!buffer.isDirect()) {
         throw new IOException("Cannot mlock a non-direct ByteBuffer");
       }
       mlock_native(buffer, len);
     }
-    
+
     /**
      * Unmaps the block from memory. See munmap(2).
-     *
+     * <p>
      * There isn't any portable way to unmap a memory region in Java.
      * So we use the sun.nio method here.
      * Note that unmapping a memory region could cause crashes if code
@@ -316,18 +327,21 @@ public class NativeIO {
      * manually unmap the memory, we are dependent on the finalizer to
      * do it, and we have no idea when the finalizer will run.
      *
-     * @param buffer    The buffer to unmap.
+     * @param buffer The buffer to unmap.
      */
     public static void munmap(MappedByteBuffer buffer) {
       if (buffer instanceof sun.nio.ch.DirectBuffer) {
         sun.misc.Cleaner cleaner =
-            ((sun.nio.ch.DirectBuffer)buffer).cleaner();
+                ((sun.nio.ch.DirectBuffer) buffer).cleaner();
         cleaner.clean();
       }
     }
 
-    /** Linux only methods used for getOwner() implementation */
+    /**
+     * Linux only methods used for getOwner() implementation
+     */
     private static native long getUIDforFDOwnerforOwner(FileDescriptor fd) throws IOException;
+
     private static native String getUserName(long uid) throws IOException;
 
     /**
@@ -340,12 +354,12 @@ public class NativeIO {
 
       // Mode constants - Set by JNI
       public static int S_IFMT = -1;    /* type of file */
-      public static int S_IFIFO  = -1;  /* named pipe (fifo) */
-      public static int S_IFCHR  = -1;  /* character special */
-      public static int S_IFDIR  = -1;  /* directory */
-      public static int S_IFBLK  = -1;  /* block special */
-      public static int S_IFREG  = -1;  /* regular */
-      public static int S_IFLNK  = -1;  /* symbolic link */
+      public static int S_IFIFO = -1;  /* named pipe (fifo) */
+      public static int S_IFCHR = -1;  /* character special */
+      public static int S_IFDIR = -1;  /* directory */
+      public static int S_IFBLK = -1;  /* block special */
+      public static int S_IFREG = -1;  /* regular */
+      public static int S_IFLNK = -1;  /* symbolic link */
       public static int S_IFSOCK = -1;  /* socket */
       public static int S_ISUID = -1;  /* set user id on execution */
       public static int S_ISGID = -1;  /* set group id on execution */
@@ -359,7 +373,7 @@ public class NativeIO {
         this.groupId = groupId;
         this.mode = mode;
       }
-      
+
       Stat(String owner, String group, int mode) {
         if (!Shell.WINDOWS) {
           this.owner = owner;
@@ -373,19 +387,21 @@ public class NativeIO {
         }
         this.mode = mode;
       }
-      
+
       @Override
       public String toString() {
         return "Stat(owner='" + owner + "', group='" + group + "'" +
-          ", mode=" + mode + ")";
+                ", mode=" + mode + ")";
       }
 
       public String getOwner() {
         return owner;
       }
+
       public String getGroup() {
         return group;
       }
+
       public int getMode() {
         return mode;
       }
@@ -401,7 +417,7 @@ public class NativeIO {
     public static Stat getFstat(FileDescriptor fd) throws IOException {
       Stat stat = null;
       if (!Shell.WINDOWS) {
-        stat = fstat(fd); 
+        stat = fstat(fd);
         stat.owner = getName(IdCache.USER, stat.ownerId);
         stat.group = getName(IdCache.GROUP, stat.groupId);
       } else {
@@ -410,10 +426,10 @@ public class NativeIO {
         } catch (NativeIOException nioe) {
           if (nioe.getErrorCode() == 6) {
             throw new NativeIOException("The handle is invalid.",
-                Errno.EBADF);
+                    Errno.EBADF);
           } else {
             LOG.warn(String.format("NativeIO.getFstat error (%d): %s",
-                nioe.getErrorCode(), nioe.getMessage()));
+                    nioe.getErrorCode(), nioe.getMessage()));
             throw new NativeIOException("Unknown error", Errno.UNKNOWN);
           }
         }
@@ -423,7 +439,7 @@ public class NativeIO {
 
     private static String getName(IdCache domain, int id) throws IOException {
       Map<Integer, CachedName> idNameCache = (domain == IdCache.USER)
-        ? USER_ID_NAME_CACHE : GROUP_ID_NAME_CACHE;
+              ? USER_ID_NAME_CACHE : GROUP_ID_NAME_CACHE;
       String name;
       CachedName cachedName = idNameCache.get(id);
       long now = System.currentTimeMillis();
@@ -434,7 +450,7 @@ public class NativeIO {
         if (LOG.isDebugEnabled()) {
           String type = (domain == IdCache.USER) ? "UserName" : "GroupName";
           LOG.debug("Got " + type + " " + name + " for ID " + id +
-            " from the native implementation");
+                  " from the native implementation");
         }
         cachedName = new CachedName(name, now);
         idNameCache.put(id, cachedName);
@@ -443,6 +459,7 @@ public class NativeIO {
     }
 
     static native String getUserName(int uid) throws IOException;
+
     static native String getGroupName(int uid) throws IOException;
 
     private static class CachedName {
@@ -456,22 +473,22 @@ public class NativeIO {
     }
 
     private static final Map<Integer, CachedName> USER_ID_NAME_CACHE =
-      new ConcurrentHashMap<Integer, CachedName>();
+            new ConcurrentHashMap<Integer, CachedName>();
 
     private static final Map<Integer, CachedName> GROUP_ID_NAME_CACHE =
-      new ConcurrentHashMap<Integer, CachedName>();
+            new ConcurrentHashMap<Integer, CachedName>();
 
-    private enum IdCache { USER, GROUP }
+    private enum IdCache {USER, GROUP}
 
-    public final static int MMAP_PROT_READ = 0x1; 
-    public final static int MMAP_PROT_WRITE = 0x2; 
-    public final static int MMAP_PROT_EXEC = 0x4; 
+    public final static int MMAP_PROT_READ = 0x1;
+    public final static int MMAP_PROT_WRITE = 0x2;
+    public final static int MMAP_PROT_EXEC = 0x4;
 
     public static native long mmap(FileDescriptor fd, int prot,
-        boolean shared, long length) throws IOException;
+                                   boolean shared, long length) throws IOException;
 
     public static native void munmap(long addr, long length)
-        throws IOException;
+            throws IOException;
   }
 
   private static boolean workaroundNonThreadSafePasswdCalls = false;
@@ -510,18 +527,22 @@ public class NativeIO {
      * @throws IOException if there is an I/O error
      */
     public static void createDirectoryWithMode(File path, int mode)
-        throws IOException {
+            throws IOException {
       createDirectoryWithMode0(path.getAbsolutePath(), mode);
     }
 
-    /** Wrapper around CreateDirectory() on Windows */
+    /**
+     * Wrapper around CreateDirectory() on Windows
+     */
     private static native void createDirectoryWithMode0(String path, int mode)
-        throws NativeIOException;
+            throws NativeIOException;
 
-    /** Wrapper around CreateFile() on Windows */
+    /**
+     * Wrapper around CreateFile() on Windows
+     */
     public static native FileDescriptor createFile(String path,
-        long desiredAccess, long shareMode, long creationDisposition)
-        throws IOException;
+                                                   long desiredAccess, long shareMode, long creationDisposition)
+            throws IOException;
 
     /**
      * Create a file for write with permissions set to the specified mode.  By
@@ -529,46 +550,55 @@ public class NativeIO {
      * lacking WRITE_DAC rights on subsequent chmod calls.  One example where
      * this can occur is writing to an SMB share where the user does not have
      * Full Control rights, and therefore WRITE_DAC is denied.
-     *
+     * <p>
      * This method mimics the semantics implemented by the JDK in
      * {@link java.io.FileOutputStream}.  The file is opened for truncate or
      * append, the sharing mode allows other readers and writers, and paths
      * longer than MAX_PATH are supported.  (See io_util_md.c in the JDK.)
      *
-     * @param path file to create
+     * @param path   file to create
      * @param append if true, then open file for append
-     * @param mode permissions of new directory
+     * @param mode   permissions of new directory
      * @return FileOutputStream of opened file
      * @throws IOException if there is an I/O error
      */
     public static FileOutputStream createFileOutputStreamWithMode(File path,
-        boolean append, int mode) throws IOException {
+                                                                  boolean append, int mode) throws IOException {
       long desiredAccess = GENERIC_WRITE;
       long shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE;
       long creationDisposition = append ? OPEN_ALWAYS : CREATE_ALWAYS;
       return new FileOutputStream(createFileWithMode0(path.getAbsolutePath(),
-          desiredAccess, shareMode, creationDisposition, mode));
+              desiredAccess, shareMode, creationDisposition, mode));
     }
 
-    /** Wrapper around CreateFile() with security descriptor on Windows */
+    /**
+     * Wrapper around CreateFile() with security descriptor on Windows
+     */
     private static native FileDescriptor createFileWithMode0(String path,
-        long desiredAccess, long shareMode, long creationDisposition, int mode)
-        throws NativeIOException;
+                                                             long desiredAccess, long shareMode, long creationDisposition, int mode)
+            throws NativeIOException;
 
-    /** Wrapper around SetFilePointer() on Windows */
+    /**
+     * Wrapper around SetFilePointer() on Windows
+     */
     public static native long setFilePointer(FileDescriptor fd,
-        long distanceToMove, long moveMethod) throws IOException;
+                                             long distanceToMove, long moveMethod) throws IOException;
 
-    /** Windows only methods used for getOwner() implementation */
+    /**
+     * Windows only methods used for getOwner() implementation
+     */
     private static native String getOwner(FileDescriptor fd) throws IOException;
 
-    /** Supported list of Windows access right flags */
+    /**
+     * Supported list of Windows access right flags
+     */
     public static enum AccessRight {
-      ACCESS_READ (0x0001),      // FILE_READ_DATA
-      ACCESS_WRITE (0x0002),     // FILE_WRITE_DATA
-      ACCESS_EXECUTE (0x0020);   // FILE_EXECUTE
+      ACCESS_READ(0x0001),      // FILE_READ_DATA
+      ACCESS_WRITE(0x0002),     // FILE_WRITE_DATA
+      ACCESS_EXECUTE(0x0020);   // FILE_EXECUTE
 
       private final int accessRight;
+
       AccessRight(int access) {
         accessRight = access;
       }
@@ -576,26 +606,30 @@ public class NativeIO {
       public int accessRight() {
         return accessRight;
       }
-    };
+    }
 
-    /** Windows only method used to check if the current process has requested
-     *  access rights on the given path. */
+    ;
+
+    /**
+     * Windows only method used to check if the current process has requested
+     * access rights on the given path.
+     */
     private static native boolean access0(String path, int requestedAccess);
 
     /**
      * Checks whether the current process has desired access rights on
      * the given path.
-     * 
+     * <p>
      * Longer term this native function can be substituted with JDK7
      * function Files#isReadable, isWritable, isExecutable.
      *
-     * @param path input path
+     * @param path          input path
      * @param desiredAccess ACCESS_READ, ACCESS_WRITE or ACCESS_EXECUTE
      * @return true if access is allowed
      * @throws IOException I/O exception on error
      */
     public static boolean access(String path, AccessRight desiredAccess)
-        throws IOException {
+            throws IOException {
       return access0(path, desiredAccess.accessRight());
     }
 
@@ -652,7 +686,9 @@ public class NativeIO {
     return NativeCodeLoader.isNativeCodeLoaded() && nativeLoaded;
   }
 
-  /** Initialize the JNI method ID and class ID cache */
+  /**
+   * Initialize the JNI method ID and class ID cache
+   */
   private static native void initNative();
 
   /**
@@ -660,15 +696,15 @@ public class NativeIO {
    * given point.
    *
    * @return 0 if no bytes can be locked into memory;
-   *         Long.MAX_VALUE if there is no limit;
-   *         The number of bytes that can be locked into memory otherwise.
+   * Long.MAX_VALUE if there is no limit;
+   * The number of bytes that can be locked into memory otherwise.
    */
   static long getMemlockLimit() {
     return isAvailable() ? getMemlockLimit0() : 0;
   }
 
   private static native long getMemlockLimit0();
-  
+
   /**
    * @return the operating system's page size.
    */
@@ -676,7 +712,7 @@ public class NativeIO {
     try {
       Field f = Unsafe.class.getDeclaredField("theUnsafe");
       f.setAccessible(true);
-      Unsafe unsafe = (Unsafe)f.get(null);
+      Unsafe unsafe = (Unsafe) f.get(null);
       return unsafe.pageSize();
     } catch (Throwable e) {
       LOG.warn("Unable to get operating system page size.  Guessing 4096.", e);
@@ -687,16 +723,18 @@ public class NativeIO {
   private static class CachedUid {
     final long timestamp;
     final String username;
+
     public CachedUid(String username, long timestamp) {
       this.timestamp = timestamp;
       this.username = username;
     }
   }
+
   private static final Map<Long, CachedUid> uidCache =
-      new ConcurrentHashMap<Long, CachedUid>();
+          new ConcurrentHashMap<Long, CachedUid>();
   private static long cacheTimeout;
   private static boolean initialized = false;
-  
+
   /**
    * The Windows logon name has two part, NetBIOS domain name and
    * user account name, of the format DOMAIN\UserName. This method
@@ -727,7 +765,7 @@ public class NativeIO {
       }
       String user = POSIX.getUserName(uid);
       LOG.info("Got UserName " + user + " for UID " + uid
-          + " from the native implementation");
+              + " from the native implementation");
       cUid = new CachedUid(user, now);
       uidCache.put(uid, cUid);
       return user;
@@ -741,7 +779,7 @@ public class NativeIO {
    * the native interface.
    */
   public static FileInputStream getShareDeleteFileInputStream(File f)
-      throws IOException {
+          throws IOException {
     if (!Shell.WINDOWS) {
       // On Linux the default FileInputStream shares delete permission
       // on the file opened.
@@ -752,12 +790,12 @@ public class NativeIO {
       // shares delete permission on the file opened.
       //
       FileDescriptor fd = Windows.createFile(
-          f.getAbsolutePath(),
-          Windows.GENERIC_READ,
-          Windows.FILE_SHARE_READ |
-              Windows.FILE_SHARE_WRITE |
-              Windows.FILE_SHARE_DELETE,
-          Windows.OPEN_EXISTING);
+              f.getAbsolutePath(),
+              Windows.GENERIC_READ,
+              Windows.FILE_SHARE_READ |
+                      Windows.FILE_SHARE_WRITE |
+                      Windows.FILE_SHARE_DELETE,
+              Windows.OPEN_EXISTING);
       return new FileInputStream(fd);
     }
   }
@@ -769,7 +807,7 @@ public class NativeIO {
    * uses the native interface.
    */
   public static FileInputStream getShareDeleteFileInputStream(File f, long seekOffset)
-      throws IOException {
+          throws IOException {
     if (!Shell.WINDOWS) {
       RandomAccessFile rf = new RandomAccessFile(f, "r");
       if (seekOffset > 0) {
@@ -782,12 +820,12 @@ public class NativeIO {
       // given offset.
       //
       FileDescriptor fd = NativeIO.Windows.createFile(
-          f.getAbsolutePath(),
-          NativeIO.Windows.GENERIC_READ,
-          NativeIO.Windows.FILE_SHARE_READ |
-              NativeIO.Windows.FILE_SHARE_WRITE |
-              NativeIO.Windows.FILE_SHARE_DELETE,
-          NativeIO.Windows.OPEN_EXISTING);
+              f.getAbsolutePath(),
+              NativeIO.Windows.GENERIC_READ,
+              NativeIO.Windows.FILE_SHARE_READ |
+                      NativeIO.Windows.FILE_SHARE_WRITE |
+                      NativeIO.Windows.FILE_SHARE_DELETE,
+              NativeIO.Windows.OPEN_EXISTING);
       if (seekOffset > 0)
         NativeIO.Windows.setFilePointer(fd, seekOffset, NativeIO.Windows.FILE_BEGIN);
       return new FileInputStream(fd);
@@ -828,20 +866,20 @@ public class NativeIO {
 
   /**
    * Create the specified File for write access, ensuring that it does not exist.
-   * @param f the file that we want to create
-   * @param permissions we want to have on the file (if security is enabled)
    *
+   * @param f           the file that we want to create
+   * @param permissions we want to have on the file (if security is enabled)
    * @throws AlreadyExistsException if the file already exists
-   * @throws IOException if any other error occurred
+   * @throws IOException            if any other error occurred
    */
   public static FileOutputStream getCreateForWriteFileOutputStream(File f, int permissions)
-      throws IOException {
+          throws IOException {
     if (!Shell.WINDOWS) {
       // Use the native wrapper around open(2)
       try {
         FileDescriptor fd = NativeIO.POSIX.open(f.getAbsolutePath(),
-            NativeIO.POSIX.O_WRONLY | NativeIO.POSIX.O_CREAT
-                | NativeIO.POSIX.O_EXCL, permissions);
+                NativeIO.POSIX.O_WRONLY | NativeIO.POSIX.O_CREAT
+                        | NativeIO.POSIX.O_EXCL, permissions);
         return new FileOutputStream(fd);
       } catch (NativeIOException nioe) {
         if (nioe.getErrno() == Errno.EEXIST) {
@@ -853,11 +891,11 @@ public class NativeIO {
       // Use the Windows native APIs to create equivalent FileOutputStream
       try {
         FileDescriptor fd = NativeIO.Windows.createFile(f.getCanonicalPath(),
-            NativeIO.Windows.GENERIC_WRITE,
-            NativeIO.Windows.FILE_SHARE_DELETE
-                | NativeIO.Windows.FILE_SHARE_READ
-                | NativeIO.Windows.FILE_SHARE_WRITE,
-            NativeIO.Windows.CREATE_NEW);
+                NativeIO.Windows.GENERIC_WRITE,
+                NativeIO.Windows.FILE_SHARE_DELETE
+                        | NativeIO.Windows.FILE_SHARE_READ
+                        | NativeIO.Windows.FILE_SHARE_WRITE,
+                NativeIO.Windows.CREATE_NEW);
         NativeIO.POSIX.chmod(f.getCanonicalPath(), permissions);
         return new FileOutputStream(fd);
       } catch (NativeIOException nioe) {
@@ -875,28 +913,27 @@ public class NativeIO {
   private synchronized static void ensureInitialized() {
     if (!initialized) {
       cacheTimeout =
-          new Configuration().getLong("hadoop.security.uid.cache.secs",
-              4*60*60) * 1000;
+              new Configuration().getLong("hadoop.security.uid.cache.secs",
+                      4 * 60 * 60) * 1000;
       LOG.info("Initialized cache for UID to User mapping with a cache" +
-          " timeout of " + cacheTimeout/1000 + " seconds.");
+              " timeout of " + cacheTimeout / 1000 + " seconds.");
       initialized = true;
     }
   }
-  
+
   /**
    * A version of renameTo that throws a descriptive exception when it fails.
    *
-   * @param src                  The source path
-   * @param dst                  The destination path
-   * 
-   * @throws NativeIOException   On failure.
+   * @param src The source path
+   * @param dst The destination path
+   * @throws NativeIOException On failure.
    */
   public static void renameTo(File src, File dst)
-      throws IOException {
+          throws IOException {
     if (!nativeLoaded) {
       if (!src.renameTo(dst)) {
         throw new IOException("renameTo(src=" + src + ", dst=" +
-          dst + ") failed.");
+                dst + ") failed.");
       }
     } else {
       renameTo0(src.getAbsolutePath(), dst.getAbsolutePath());
@@ -905,7 +942,7 @@ public class NativeIO {
 
   /**
    * Creates a hardlink "dst" that points to "src".
-   *
+   * <p>
    * This is deprecated since JDK7 NIO can create hardlinks via the
    * {@link java.nio.file.Files} API.
    *
@@ -925,50 +962,49 @@ public class NativeIO {
   /**
    * A version of renameTo that throws a descriptive exception when it fails.
    *
-   * @param src                  The source path
-   * @param dst                  The destination path
-   * 
-   * @throws NativeIOException   On failure.
+   * @param src The source path
+   * @param dst The destination path
+   * @throws NativeIOException On failure.
    */
   private static native void renameTo0(String src, String dst)
-      throws NativeIOException;
+          throws NativeIOException;
 
   private static native void link0(String src, String dst)
-      throws NativeIOException;
+          throws NativeIOException;
 
   /**
    * Unbuffered file copy from src to dst without tainting OS buffer cache
-   *
+   * <p>
    * In POSIX platform:
    * It uses FileChannel#transferTo() which internally attempts
    * unbuffered IO on OS with native sendfile64() support and falls back to
    * buffered IO otherwise.
-   *
+   * <p>
    * It minimizes the number of FileChannel#transferTo call by passing the the
    * src file size directly instead of a smaller size as the 3rd parameter.
    * This saves the number of sendfile64() system call when native sendfile64()
    * is supported. In the two fall back cases where sendfile is not supported,
    * FileChannle#transferTo already has its own batching of size 8 MB and 8 KB,
    * respectively.
-   *
+   * <p>
    * In Windows Platform:
    * It uses its own native wrapper of CopyFileEx with COPY_FILE_NO_BUFFERING
    * flag, which is supported on Windows Server 2008 and above.
-   *
+   * <p>
    * Ideally, we should use FileChannel#transferTo() across both POSIX and Windows
    * platform. Unfortunately, the wrapper(Java_sun_nio_ch_FileChannelImpl_transferTo0)
    * used by FileChannel#transferTo for unbuffered IO is not implemented on Windows.
    * Based on OpenJDK 6/7/8 source code, Java_sun_nio_ch_FileChannelImpl_transferTo0
    * on Windows simply returns IOS_UNSUPPORTED.
-   *
+   * <p>
    * Note: This simple native wrapper does minimal parameter checking before copy and
    * consistency check (e.g., size) after copy.
    * It is recommended to use wrapper function like
    * the Storage#nativeCopyFileUnbuffered() function in hadoop-hdfs with pre/post copy
    * checks.
    *
-   * @param src                  The source path
-   * @param dst                  The destination path
+   * @param src The source path
+   * @param dst The destination path
    * @throws IOException
    */
   public static void copyFileUnbuffered(File src, File dst) throws IOException {
@@ -1002,4 +1038,5 @@ public class NativeIO {
   }
 
   private static native void copyFileUnbuffered0(String src, String dst)
-      throws NativeIOException;
+          throws NativeIOException;
+}

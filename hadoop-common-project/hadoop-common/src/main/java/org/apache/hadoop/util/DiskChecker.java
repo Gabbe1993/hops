@@ -143,35 +143,6 @@ public class DiskChecker {
   }
 
   /**
-   * Recurse down a directory tree, checking all child directories.
-   * @param dir
-   * @throws DiskErrorException
-   */
-  public static void checkDirs(File dir) throws DiskErrorException {
-    checkDir(dir);
-    for (File child : dir.listFiles()) {
-      if (child.isDirectory()) {
-        checkDirs(child);
-      }
-    }
-  }
-
-  /**
-   * Create the directory if it doesn't exist and check that dir is readable,
-   * writable and executable
-   *
-   * @param dir
-   * @throws DiskErrorException
-   */
-  public static void checkDir(File dir) throws DiskErrorException {
-    if (!mkdirsWithExistsCheck(dir)) {
-      throw new DiskErrorException("Can not create directory: "
-                                   + dir.toString());
-    }
-    checkDirAccess(dir);
-  }
-
-  /**
    * Create the directory or check permissions if it already exists.
    *
    * The semantics of mkdirsWithExistsAndPermissionCheck method is different

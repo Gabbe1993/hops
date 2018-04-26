@@ -93,6 +93,10 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
 
   public static final String DFS_NAMENODE_IDSMONITOR_CHECK_INTERVAL_IN_MS =
       "dfs.namenode.id.updateThreshold";
+
+  public static final String DFS_NAMENODE_NAME_DIR_KEY =
+          "dfs.namenode.name.dir";
+
   public static final int DFS_NAMENODE_IDSMONITOR_CHECK_INTERVAL_IN_MS_DEFAULT =
       1000;
 
