@@ -53,7 +53,7 @@ public class DiskChecker {
   /**
    * Create the directory if it doesn't exist and check that dir is readable,
    * writable and executable
-   *  
+   *
    * @param dir
    * @throws DiskErrorException
    */
@@ -85,7 +85,7 @@ public class DiskChecker {
   /**
    * Checks that the current running process can read, write, and execute the
    * given directory by using methods of the File object.
-   * 
+   *
    * @param dir File to check
    * @throws DiskErrorException if dir is not readable, not writable, or not
    *   executable
@@ -140,6 +140,35 @@ public class DiskChecker {
     return (parent != null) &&
         (mkdirsWithExistsCheck(new File(parent)) &&
             (canonDir.mkdir() || canonDir.exists()));
+  }
+
+  /**
+   * Recurse down a directory tree, checking all child directories.
+   * @param dir
+   * @throws DiskErrorException
+   */
+  public static void checkDirs(File dir) throws DiskErrorException {
+    checkDir(dir);
+    for (File child : dir.listFiles()) {
+      if (child.isDirectory()) {
+        checkDirs(child);
+      }
+    }
+  }
+
+  /**
+   * Create the directory if it doesn't exist and check that dir is readable,
+   * writable and executable
+   *
+   * @param dir
+   * @throws DiskErrorException
+   */
+  public static void checkDir(File dir) throws DiskErrorException {
+    if (!mkdirsWithExistsCheck(dir)) {
+      throw new DiskErrorException("Can not create directory: "
+                                   + dir.toString());
+    }
+    checkDirAccess(dir);
   }
 
   /**

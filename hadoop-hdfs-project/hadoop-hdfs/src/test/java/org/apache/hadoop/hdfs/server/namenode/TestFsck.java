@@ -39,10 +39,7 @@ import org.apache.hadoop.hdfs.DFSTestUtil;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hdfs.protocol.CorruptFileBlocks;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.protocol.HdfsFileStatus;
-import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.apache.hadoop.hdfs.protocol.*;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.apache.hadoop.hdfs.server.namenode.NamenodeFsck.Result;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocols;
@@ -73,10 +70,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.FileChannel;
 import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -209,7 +203,7 @@ public class TestFsck {
     // Turn off the logs
     Logger logger = ((Log4JLogger) FSNamesystem.auditLog).getLogger();
     logger.setLevel(Level.OFF);
-    
+
     // Audit log should contain one getfileinfo and one fsck
     BufferedReader reader = new BufferedReader(new FileReader(auditLogFile));
     String line = reader.readLine();
@@ -823,16 +817,14 @@ public class TestFsck {
         for (int j = 0; j <= 1; j++) {
           File storageDir = cluster.getInstanceStorageDir(i, j);
           File data_dir = MiniDFSCluster.getFinalizedDir(storageDir, bpid);
-          File[] blocks = data_dir.listFiles();
-          if (blocks == null) {
+          List<File> metadataFiles = MiniDFSCluster.getAllBlockMetadataFiles(
+                  data_dir);
+          if (metadataFiles == null)
             continue;
-          }
-  
-          for (File block : blocks) {
-            if (!block.getName().startsWith("blk_")) {
-              continue;
-            }
-            assertTrue("Cannot remove file.", block.delete());
+          for (File metadataFile : metadataFiles) {
+            File blockFile = Block.metaToBlockFile(metadataFile);
+            assertTrue("Cannot remove file.", blockFile.delete());
+            assertTrue("Cannot remove file.", metadataFile.delete());
           }
         }
       }

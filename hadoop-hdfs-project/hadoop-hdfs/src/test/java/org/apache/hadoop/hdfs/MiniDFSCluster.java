@@ -2235,8 +2235,8 @@ public class MiniDFSCluster {
    * @return file corresponding to the block
    */
   public static File getBlockFile(File storageDir, ExtendedBlock blk) {
-    return new File(getFinalizedDir(storageDir, blk.getBlockPoolId()),
-        blk.getBlockName());
+    return new File(DatanodeUtil.idToBlockDir(getFinalizedDir(storageDir,
+            blk.getBlockPoolId()), blk.getBlockId()), blk.getBlockName());
   }
 
   /**
@@ -2251,7 +2251,31 @@ public class MiniDFSCluster {
       cluster.shutdown();
     }
   }
-  
+
+  /**
+   * Return all block metadata files in given directory (recursive search)
+   */
+  public static List<File> getAllBlockMetadataFiles(File storageDir) {
+    List<File> results = new ArrayList<File>();
+    File[] files = storageDir.listFiles();
+    if (files == null) {
+      return null;
+    }
+    for (File f : files) {
+      if (f.getName().startsWith("blk_") && f.getName().endsWith(
+              Block.METADATA_EXTENSION)) {
+        results.add(f);
+      } else if (f.isDirectory()) {
+        List<File> subdirResults = getAllBlockMetadataFiles(f);
+        if (subdirResults != null) {
+          results.addAll(subdirResults);
+        }
+      }
+    }
+    return results;
+  }
+
+
   /**
    * Get all files related to a block from all the datanodes
    *

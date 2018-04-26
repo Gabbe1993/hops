@@ -49,6 +49,7 @@ import java.util.zip.CRC32;
 
 import static org.apache.hadoop.hdfs.TestBlockStoragePolicy.conf;
 import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType.DATA_NODE;
+import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType.NAME_NODE;
 
 /**
  * This class defines a number of static helper methods used by the
@@ -146,23 +147,24 @@ public class UpgradeUtilities {
       FileUtil.fullyDelete(new File(namenodeStorage, "in_use.lock"));
       FileUtil.fullyDelete(new File(datanodeStorage, "in_use.lock"));
     }
+    namenodeStorageChecksum = checksumContents(NAME_NODE,
+            new File(namenodeStorage, "current"), false);
     File dnCurDir = new File(datanodeStorage, "current");
-    datanodeStorageChecksum = checksumContents(DATA_NODE, dnCurDir);
-    
-    String bpid = cluster.getNamesystem(0).getBlockPoolId();
-    File bpCurDir =
-        new File(BlockPoolSliceStorage.getBpRoot(bpid, dnCurDir), "current");
-    blockPoolStorageChecksum = checksumContents(DATA_NODE, bpCurDir);
-    
-    File bpCurFinalizeDir =
-        new File(BlockPoolSliceStorage.getBpRoot(bpid, dnCurDir),
-            "current/" + DataStorage.STORAGE_DIR_FINALIZED);
-    blockPoolFinalizedStorageChecksum =
-        checksumContents(DATA_NODE, bpCurFinalizeDir);
-    
+    datanodeStorageChecksum = checksumContents(DATA_NODE, dnCurDir, false);
+
+    File bpCurDir = new File(BlockPoolSliceStorage.getBpRoot(bpid, dnCurDir),
+            "current");
+    blockPoolStorageChecksum = checksumContents(DATA_NODE, bpCurDir, false);
+
+    File bpCurFinalizeDir = new File(BlockPoolSliceStorage.getBpRoot(bpid, dnCurDir),
+            "current/"+DataStorage.STORAGE_DIR_FINALIZED);
+    blockPoolFinalizedStorageChecksum = checksumContents(DATA_NODE,
+            bpCurFinalizeDir, true);
+
     File bpCurRbwDir = new File(BlockPoolSliceStorage.getBpRoot(bpid, dnCurDir),
-        "current/" + DataStorage.STORAGE_DIR_RBW);
-    blockPoolRbwStorageChecksum = checksumContents(DATA_NODE, bpCurRbwDir);
+            "current/"+DataStorage.STORAGE_DIR_RBW);
+    blockPoolRbwStorageChecksum = checksumContents(DATA_NODE, bpCurRbwDir,
+            false);
   }
   
   // Private helper method that writes a file to the given file system.
@@ -250,58 +252,68 @@ public class UpgradeUtilities {
   public static long checksumMasterBlockPoolRbwContents() {
     return blockPoolRbwStorageChecksum;
   }
-  
+
   /**
    * Compute the checksum of all the files in the specified directory.
-   * The contents of subdirectories are not included. This method provides
-   * an easy way to ensure equality between the contents of two directories.
+   * This method provides an easy way to ensure equality between the contents
+   * of two directories.
    *
-   * @param nodeType
-   *     if DATA_NODE then any file named "VERSION" is ignored.
-   *     This is because this file file is changed every time
-   *     the Datanode is started.
-   * @param dir
-   *     must be a directory. Subdirectories are ignored.
+   * @param nodeType if DATA_NODE then any file named "VERSION" is ignored.
+   *    This is because this file file is changed every time
+   *    the Datanode is started.
+   * @param dir must be a directory
+   * @param recursive whether or not to consider subdirectories
+   *
+   * @throws IllegalArgumentException if specified directory is not a directory
+   * @throws IOException if an IOException occurs while reading the files
    * @return the computed checksum value
-   * @throws IllegalArgumentException
-   *     if specified directory is not a directory
-   * @throws IOException
-   *     if an IOException occurs while reading the files
    */
-  public static long checksumContents(NodeType nodeType, File dir)
-      throws IOException {
+  public static long checksumContents(NodeType nodeType, File dir,
+                                      boolean recursive) throws IOException {
+    CRC32 checksum = new CRC32();
+    checksumContentsHelper(nodeType, dir, checksum, recursive);
+    return checksum.getValue();
+  }
+
+  public static void checksumContentsHelper(NodeType nodeType, File dir,
+                                            CRC32 checksum, boolean recursive) throws IOException {
     if (!dir.isDirectory()) {
       throw new IllegalArgumentException(
-          "Given argument is not a directory:" + dir);
+              "Given argument is not a directory:" + dir);
     }
     File[] list = dir.listFiles();
     Arrays.sort(list);
-    CRC32 checksum = new CRC32();
-    for (File aList : list) {
-      if (!aList.isFile()) {
+    for (int i = 0; i < list.length; i++) {
+      if (!list[i].isFile()) {
+        if (recursive) {
+          checksumContentsHelper(nodeType, list[i], checksum, recursive);
+        }
         continue;
       }
-      // skip VERSION file for DataNodes
-      if (nodeType == DATA_NODE && aList.getName().equals("VERSION")) {
+
+      // skip VERSION and dfsUsed file for DataNodes
+      if (nodeType == DATA_NODE &&
+              (list[i].getName().equals("VERSION") ||
+                      list[i].getName().equals("dfsUsed"))) {
         continue;
       }
+
       FileInputStream fis = null;
       try {
-        fis = new FileInputStream(aList);
+        fis = new FileInputStream(list[i]);
         byte[] buffer = new byte[1024];
         int bytesRead;
         while ((bytesRead = fis.read(buffer)) != -1) {
           checksum.update(buffer, 0, bytesRead);
         }
       } finally {
-        if (fis != null) {
+        if(fis != null) {
           fis.close();
         }
       }
     }
-    return checksum.getValue();
   }
-  
+
   /**
    * Simulate the {@link DFSConfigKeys#DFS_NAMENODE_NAME_DIR_KEY} of a
    * populated

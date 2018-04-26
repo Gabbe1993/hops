@@ -810,10 +810,6 @@ public class FsVolumeImpl implements FsVolumeSpi {
     bp.addToReplicasMap(volumeMap, dir, isFinalized);
   }
 
-  void clearPath(String bpid, File f) throws IOException {
-    getBlockPoolSlice(bpid).clearPath(f);
-  }
-
   @Override
   public String toString() {
     return currentDir != null ? currentDir.getParent() : "NULL";

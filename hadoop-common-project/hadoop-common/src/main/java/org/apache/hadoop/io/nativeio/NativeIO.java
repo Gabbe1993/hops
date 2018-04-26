@@ -495,7 +495,7 @@ public class NativeIO {
     public static final long FILE_BEGIN = 0;
     public static final long FILE_CURRENT = 1;
     public static final long FILE_END = 2;
-    
+
     public static final long FILE_ATTRIBUTE_NORMAL = 0x00000080L;
 
     /**
@@ -1003,4 +1003,3 @@ public class NativeIO {
 
   private static native void copyFileUnbuffered0(String src, String dst)
       throws NativeIOException;
-}

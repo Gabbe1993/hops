@@ -45,7 +45,7 @@ class BlockPoolSlice {
   private final FsVolumeImpl volume;
       // volume to which this BlockPool belongs to
   private final File currentDir; // StorageDirectory/current/bpid/current
-  private final LDir finalizedDir; // directory store Finalized replica
+  private final File finalizedDir; // directory store Finalized replica
   private final File rbwDir; // directory store RBW replica
   private final File tmpDir; // directory store Temporary replica
   private final FileIoProvider fileIoProvider;
@@ -71,8 +71,13 @@ class BlockPoolSlice {
     this.bpid = bpid;
     this.volume = volume;
     this.currentDir = new File(bpDir, DataStorage.STORAGE_DIR_CURRENT);
-    final File finalizedDir =
-        new File(currentDir, DataStorage.STORAGE_DIR_FINALIZED);
+    this.finalizedDir = new File(
+            currentDir, DataStorage.STORAGE_DIR_FINALIZED);
+    if (!this.finalizedDir.exists()) {
+      if (!this.finalizedDir.mkdirs()) {
+        throw new IOException("Failed to mkdirs " + this.finalizedDir);
+      }
+    }
     this.fileIoProvider = volume.getFileIoProvider();
 
     // Files that were being written when the datanode was last shutdown
@@ -170,16 +175,20 @@ class BlockPoolSlice {
    * Replaced addBlocks
    */
   File addFinalizedBlock(Block b, ReplicaInfo replicaInfo) throws IOException {
-    File blockFile = ((LocalReplica)replicaInfo).getBlockFile();
-    File blockDir = finalizedDir.addBlock(b, replicaInfo, blockFile);
-    fileIoProvider.mkdirsWithExistsCheck(volume, blockDir); // TODO: GABRIEL - fails in test
-    //File blockFile = FsDatasetImpl.moveBlockFiles(b, replicaInfo, blockDir);
-
-    return blockDir;
+    File blockDir = DatanodeUtil.idToBlockDir(finalizedDir, b.getBlockId());
+    if (!blockDir.exists()) {
+      if (!blockDir.mkdirs()) {
+        throw new IOException("Failed to mkdirs " + blockDir);
+      }
+    }
+    File blockFile = FsDatasetImpl.moveBlockFiles(b, f, blockDir);
+    File metaFile = FsDatasetUtil.getMetaFile(blockFile, b.getGenerationStamp());
+    dfsUsage.incDfsUsed(b.getNumBytes()+metaFile.length());
+    return blockFile;
   }
 
   void checkDirs() throws DiskErrorException {
-    finalizedDir.checkDirTree();
+    DiskChecker.checkDirs(finalizedDir);
     DiskChecker.checkDir(tmpDir);
     DiskChecker.checkDir(rbwDir);
   }
@@ -209,7 +218,7 @@ class BlockPoolSlice {
       if (!Block.isBlockFilename(blockFile)) {
         continue;
       }
-      
+
       long genStamp =
           FsDatasetUtil.getGenerationStampFromFile(blockFiles, blockFile);
       long blockId = Block.filename2id(blockFile.getName());

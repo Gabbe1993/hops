@@ -60,6 +60,14 @@ import java.util.regex.Pattern;
 @InterfaceAudience.Private
 public class BlockPoolSliceStorage extends Storage {
   private static final Pattern BLOCK_POOL_PATH_PATTERN = Pattern.compile(
+          "^(.*)(" + BLOCK_POOL_ID_PATTERN_BASE + ")(.*)$");
+
+  private static final Pattern BLOCK_POOL_CURRENT_PATH_PATTERN = Pattern.compile(
+          "^(.*)(" + BLOCK_POOL_ID_PATTERN_BASE + ")(" + STORAGE_DIR_CURRENT + ")(.*)$");
+
+  private static final Pattern BLOCK_POOL_TRASH_PATH_PATTERN = Pattern.compile(
+          "^(.*)(" + BLOCK_POOL_ID_PATTERN_BASE + ")(" + TRASH_ROOT_DIR + ")(.*)$");
+
           "^(.*)" +
                   "(\\/BP-[0-9]+\\-\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\-[0-9]+\\/.*)$");
 
