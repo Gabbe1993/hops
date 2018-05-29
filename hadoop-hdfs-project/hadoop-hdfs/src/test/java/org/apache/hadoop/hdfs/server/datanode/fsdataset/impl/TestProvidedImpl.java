@@ -68,6 +68,7 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.util.StringUtils;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -584,6 +585,7 @@ public class TestProvidedImpl {
    *
    * @throws Exception
    */
+  @Ignore
   @Test
   public void testProvidedReplicaWithPathHandle() throws Exception {
 
