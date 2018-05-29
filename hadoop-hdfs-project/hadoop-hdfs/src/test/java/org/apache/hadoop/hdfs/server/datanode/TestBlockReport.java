@@ -67,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
@@ -90,8 +91,8 @@ public class TestBlockReport {
 
   private static short REPL_FACTOR = 1;
   private static final int RAND_LIMIT = 2000;
-  private static final long DN_RESCAN_INTERVAL = 5000;
-  private static final long DN_RESCAN_EXTRA_WAIT = 2 * DN_RESCAN_INTERVAL;
+  private static final long DN_RESCAN_INTERVAL = 1;
+  private static final long DN_RESCAN_EXTRA_WAIT = 3 * DN_RESCAN_INTERVAL;
   private static final int DN_N0 = 0;
   private static final int FILE_START = 0;
 
@@ -117,7 +118,7 @@ public class TestBlockReport {
   public void startUpCluster() throws IOException {
     REPL_FACTOR = 1; //Reset if case a test has modified the value
     cluster =
-        new MiniDFSCluster.Builder(conf).numDataNodes(REPL_FACTOR).build();
+            new MiniDFSCluster.Builder(conf).numDataNodes(REPL_FACTOR).build();
     fs = cluster.getFileSystem();
     bpid = cluster.getNamesystem().getBlockPoolId();
   }
@@ -132,14 +133,14 @@ public class TestBlockReport {
   // Generate a block report, optionally corrupting the generation
   // stamp and/or length of one block.
   private static StorageBlockReport[] getBlockReports(
-      DataNode dn, String bpid, boolean corruptOneBlockGs,
-      boolean corruptOneBlockLen) {
+          DataNode dn, String bpid, boolean corruptOneBlockGs,
+          boolean corruptOneBlockLen) {
     Map<DatanodeStorage, BlockReport> perVolumeBlockLists =
-        dn.getFSDataset().getBlockReports(bpid);
+            dn.getFSDataset().getBlockReports(bpid);
 
     // Send block report
     StorageBlockReport[] reports =
-        new StorageBlockReport[perVolumeBlockLists.size()];
+            new StorageBlockReport[perVolumeBlockLists.size()];
     boolean corruptedGs = false;
     boolean corruptedLen = false;
 
@@ -165,7 +166,7 @@ public class TestBlockReport {
       }
 
       reports[reportIndex++] =
-          new StorageBlockReport(dnStorage, blockList);
+              new StorageBlockReport(dnStorage, blockList);
     }
 
     return reports;
@@ -181,7 +182,7 @@ public class TestBlockReport {
    * @throws IOException
    */
   private void sendBlockReports(DatanodeRegistration dnR, String poolId,
-      StorageBlockReport[] reports, boolean needtoSplit) throws IOException {
+                                StorageBlockReport[] reports, boolean needtoSplit) throws IOException {
     if (!needtoSplit) {
       LOG.info("Sending combined block reports for " + dnR);
       cluster.getNameNodeRpc().blockReport(dnR, poolId, reports);
@@ -290,7 +291,7 @@ public class TestBlockReport {
       Block b = blocks.get(i);
       if (LOG.isDebugEnabled()) {
         LOG.debug("Block " + b.getBlockName() + " before\t" + "Size " +
-            b.getNumBytes());
+                b.getNumBytes());
       }
       oldLengths[i] = b.getNumBytes();
       if (LOG.isDebugEnabled()) {
@@ -300,7 +301,7 @@ public class TestBlockReport {
       b.setNoPersistance(b.getBlockId(), tempLen, b.getGenerationStamp());
       if (LOG.isDebugEnabled()) {
         LOG.debug("Block " + b.getBlockName() + " after\t " + "Size " +
-            b.getNumBytes());
+                b.getNumBytes());
       }
     }
     // all blocks belong to the same file, hence same BP
@@ -311,17 +312,17 @@ public class TestBlockReport {
     sendBlockReports(dnR, poolId, reports, splitBlockReports);
 
     List<LocatedBlock> blocksAfterReport =
-        DFSTestUtil.getAllBlocks(fs.open(filePath));
+            DFSTestUtil.getAllBlocks(fs.open(filePath));
 
     if (LOG.isDebugEnabled()) {
       LOG.debug(
-          "After mods: Number of blocks allocated " + blocksAfterReport.size());
+              "After mods: Number of blocks allocated " + blocksAfterReport.size());
     }
 
     for (int i = 0; i < blocksAfterReport.size(); i++) {
       ExtendedBlock b = blocksAfterReport.get(i).getBlock();
       assertEquals("Length of " + i + "th block is incorrect", oldLengths[i],
-          b.getNumBytes());
+              b.getNumBytes());
     }
   }
 
@@ -341,7 +342,7 @@ public class TestBlockReport {
 
     Path filePath = new Path("/" + METHOD_NAME + ".dat");
     DFSTestUtil
-        .createFile(fs, filePath, FILE_SIZE, REPL_FACTOR, rand.nextLong());
+            .createFile(fs, filePath, FILE_SIZE, REPL_FACTOR, rand.nextLong());
 
     // mock around with newly created blocks and delete some
     File dataDir = new File(cluster.getDataDirectory());
@@ -350,8 +351,8 @@ public class TestBlockReport {
     List<ExtendedBlock> blocks2Remove = new ArrayList<>();
     List<Integer> removedIndex = new ArrayList<>();
     List<LocatedBlock> lBlocks = cluster.getNameNodeRpc()
-        .getBlockLocations(filePath.toString(), FILE_START, FILE_SIZE)
-        .getLocatedBlocks();
+            .getBlockLocations(filePath.toString(), FILE_START, FILE_SIZE)
+            .getLocatedBlocks();
 
     while (removedIndex.size() != 2) {
       int newRemoveIndex = rand.nextInt(lBlocks.size());
@@ -374,7 +375,7 @@ public class TestBlockReport {
         LOG.debug("Removing the block " + b.getBlockName());
       }
       for (File f : findAllFiles(dataDir,
-          new MyFileFilter(b.getBlockName(), true))) {
+              new MyFileFilter(b.getBlockName(), true))) {
         DataNodeTestUtils.getFSDataset(dn0).unfinalizeBlock(b);
         if (!f.delete()) {
           LOG.warn("Couldn't delete " + b.getBlockName());
@@ -384,7 +385,7 @@ public class TestBlockReport {
       }
     }
 
-    waitTil(DN_RESCAN_EXTRA_WAIT);
+    waitTil(TimeUnit.SECONDS.toMillis(DN_RESCAN_EXTRA_WAIT));
 
     // all blocks belong to the same file, hence same BP
     String poolId = cluster.getNamesystem().getBlockPoolId();
@@ -394,15 +395,15 @@ public class TestBlockReport {
     sendBlockReports(dnR, poolId, reports, splitBlockReports);
 
     BlockManagerTestUtil.getComputedDatanodeWork(cluster.getNamesystem()
-        .getBlockManager());
+            .getBlockManager());
 
     printStats();
 
     assertEquals("Wrong number of MissingBlocks is found", blocks2Remove.size(),
-        cluster.getNamesystem().getMissingBlocksCount());
+            cluster.getNamesystem().getMissingBlocksCount());
     assertEquals("Wrong number of UnderReplicatedBlocks is found",
-        blocks2Remove.size(),
-        cluster.getNamesystem().getUnderReplicatedBlocks());
+            blocks2Remove.size(),
+            cluster.getNamesystem().getUnderReplicatedBlocks());
   }
 
 
@@ -436,9 +437,9 @@ public class TestBlockReport {
     printStats();
 
     assertThat("Wrong number of corrupt blocks",
-        cluster.getNamesystem().getCorruptReplicaBlocks(), is(1L));
+            cluster.getNamesystem().getCorruptReplicaBlocks(), is(1L));
     assertThat("Wrong number of PendingDeletion blocks",
-        cluster.getNamesystem().getPendingDeletionBlocks(), is(0L));
+            cluster.getNamesystem().getPendingDeletionBlocks(), is(0L));
   }
 
   /**
@@ -453,7 +454,7 @@ public class TestBlockReport {
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path filePath = new Path("/" + METHOD_NAME + ".dat");
     DFSTestUtil.createFile(fs, filePath,
-        FILE_SIZE, REPL_FACTOR, rand.nextLong());
+            FILE_SIZE, REPL_FACTOR, rand.nextLong());
 
 
     DataNode dn = cluster.getDataNodes().get(DN_N0);
@@ -462,7 +463,7 @@ public class TestBlockReport {
 
     // Create a bogus new block which will not be present on the namenode.
     ExtendedBlock b = new ExtendedBlock(
-        poolId, rand.nextLong(), 1024L, rand.nextLong());
+            poolId, rand.nextLong(), 1024L, rand.nextLong());
     dn.getFSDataset().createRbw(StorageType.DEFAULT, b);
 
     DatanodeRegistration dnR = dn.getDNRegistrationForBP(poolId);
@@ -471,9 +472,9 @@ public class TestBlockReport {
     printStats();
 
     assertThat("Wrong number of corrupt blocks",
-        cluster.getNamesystem().getCorruptReplicaBlocks(), is(0L));
+            cluster.getNamesystem().getCorruptReplicaBlocks(), is(0L));
     assertThat("Wrong number of PendingDeletion blocks",
-        cluster.getNamesystem().getPendingDeletionBlocks(), is(1L));
+            cluster.getNamesystem().getPendingDeletionBlocks(), is(1L));
   }
 
 
@@ -503,7 +504,7 @@ public class TestBlockReport {
     printStats();
     Thread.sleep(10000); //HOP: wait for the replication monitor to catch up
     assertEquals("Wrong number of PendingReplication Blocks", 0,
-        cluster.getNamesystem().getUnderReplicatedBlocks());
+            cluster.getNamesystem().getUnderReplicatedBlocks());
   }
 
   /**
@@ -539,22 +540,22 @@ public class TestBlockReport {
     printStats();
 
     assertThat("Wrong number of corrupt blocks",
-        cluster.getNamesystem().getCorruptReplicaBlocks(), is(0L));
+            cluster.getNamesystem().getCorruptReplicaBlocks(), is(0L));
     assertThat("Wrong number of PendingDeletion blocks",
-        cluster.getNamesystem().getPendingDeletionBlocks(), is(1L));
+            cluster.getNamesystem().getPendingDeletionBlocks(), is(1L));
     assertThat("Wrong number of PendingReplication blocks",
-        cluster.getNamesystem().getPendingReplicationBlocks(), is(0L));
+            cluster.getNamesystem().getPendingReplicationBlocks(), is(0L));
 
     reports = getBlockReports(dn, poolId, false, true);
     sendBlockReports(dnR, poolId, reports, splitBlockReports);
     printStats();
 
     assertThat("Wrong number of corrupt blocks",
-        cluster.getNamesystem().getCorruptReplicaBlocks(), is(1L));
+            cluster.getNamesystem().getCorruptReplicaBlocks(), is(1L));
     assertThat("Wrong number of PendingDeletion blocks",
-        cluster.getNamesystem().getPendingDeletionBlocks(), is(1L));
+            cluster.getNamesystem().getPendingDeletionBlocks(), is(1L));
     assertThat("Wrong number of PendingReplication blocks",
-        cluster.getNamesystem().getPendingReplicationBlocks(), is(0L));
+            cluster.getNamesystem().getPendingReplicationBlocks(), is(0L));
 
     printStats();
   }
@@ -585,7 +586,7 @@ public class TestBlockReport {
 
     try {
       ArrayList<Block> blocks =
-          writeFile(METHOD_NAME, 12 * bytesChkSum, filePath);
+              writeFile(METHOD_NAME, 12 * bytesChkSum, filePath);
       Block bl = findBlock(filePath, 12 * bytesChkSum);
       BlockChecker bc = new BlockChecker(filePath);
       bc.start();
@@ -600,7 +601,7 @@ public class TestBlockReport {
       sendBlockReports(dnR, poolId, reports, splitBlockReports);
 
       assertEquals("Wrong number of PendingReplication blocks", blocks.size(),
-          cluster.getNamesystem().getPendingReplicationBlocks());
+              cluster.getNamesystem().getPendingReplicationBlocks());
       printStats();
 
       try {
@@ -644,7 +645,7 @@ public class TestBlockReport {
       sendBlockReports(dnR, poolId, reports, splitBlockReports);
       printStats();
       assertEquals("Wrong number of PendingReplication blocks",
-          2, cluster.getNamesystem().getPendingReplicationBlocks());
+              2, cluster.getNamesystem().getPendingReplicationBlocks());
 
       try {
         bc.join();
@@ -665,12 +666,12 @@ public class TestBlockReport {
    */
   @Test
   public void testOneReplicaRbwReportArrivesAfterBlockCompleted()
-      throws Exception {
+          throws Exception {
     final CountDownLatch brFinished = new CountDownLatch(1);
     DelayAnswer delayer = new GenericTestUtils.DelayAnswer(LOG) {
       @Override
       protected Object passThrough(InvocationOnMock invocation)
-          throws Throwable {
+              throws Throwable {
         try {
           return super.passThrough(invocation);
         } finally {
@@ -701,8 +702,8 @@ public class TestBlockReport {
       DatanodeProtocol spy = DataNodeTestUtils.spyOnBposToNN(dn, nn);
 
       Mockito.doAnswer(delayer).when(spy)
-          .blockReport(Mockito.<DatanodeRegistration>anyObject(),
-              Mockito.anyString(), Mockito.<StorageBlockReport[]>anyObject());
+              .blockReport(Mockito.<DatanodeRegistration>anyObject(),
+                      Mockito.anyString(), Mockito.<StorageBlockReport[]>anyObject());
 
       // Force a block report to be generated. The block report will have
       // an RBW replica in it. Wait for the RPC to be sent, but block
@@ -761,7 +762,7 @@ public class TestBlockReport {
       }
       if (waiting_period > TIMEOUT) {
         assertTrue("Was waiting too long to get ReplicaInfo from a datanode",
-            tooLongWait);
+                tooLongWait);
       }
     }
 
@@ -775,11 +776,11 @@ public class TestBlockReport {
       state = r.getState();
       if (LOG.isDebugEnabled()) {
         LOG.debug("Keep waiting for " + bl.getBlockName() +
-            " is in state " + state.getValue());
+                " is in state " + state.getValue());
       }
       if (Time.now() - start > TIMEOUT) {
         assertTrue("Was waiting too long for a replica to become TEMPORARY",
-            tooLongWait);
+                tooLongWait);
       }
     }
     if (LOG.isDebugEnabled()) {
@@ -790,7 +791,7 @@ public class TestBlockReport {
   // Helper methods from here below...
   // Write file and start second data node.
   private ArrayList<Block> writeFile(final String METHOD_NAME,
-      final long fileSize, Path filePath) {
+                                     final long fileSize, Path filePath) {
     ArrayList<Block> blocks = null;
     try {
       REPL_FACTOR = 2;
@@ -804,7 +805,7 @@ public class TestBlockReport {
   }
 
   private void startDNandWait(Path filePath, boolean waitReplicas)
-      throws IOException, InterruptedException, TimeoutException {
+          throws IOException, InterruptedException, TimeoutException {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Before next DN start: " + cluster.getDataNodes().size());
     }
@@ -816,8 +817,8 @@ public class TestBlockReport {
     if (LOG.isDebugEnabled()) {
       int lastDn = datanodes.size() - 1;
       LOG.debug("New datanode " +
-          cluster.getDataNodes().get(lastDn).getDisplayName() +
-          " has been started");
+              cluster.getDataNodes().get(lastDn).getDisplayName() +
+              " has been started");
     }
     if (waitReplicas) {
       DFSTestUtil.waitReplication(fs, filePath, REPL_FACTOR);
@@ -825,15 +826,15 @@ public class TestBlockReport {
   }
 
   private ArrayList<Block> prepareForRide(final Path filePath,
-      final String METHOD_NAME, long fileSize) throws IOException {
+                                          final String METHOD_NAME, long fileSize) throws IOException {
     LOG.info("Running test " + METHOD_NAME);
 
     DFSTestUtil
-        .createFile(fs, filePath, fileSize, REPL_FACTOR, rand.nextLong());
+            .createFile(fs, filePath, fileSize, REPL_FACTOR, rand.nextLong());
 
     return locatedToBlocks(cluster.getNameNodeRpc()
-        .getBlockLocations(filePath.toString(), FILE_START, fileSize)
-        .getLocatedBlocks(), null);
+            .getBlockLocations(filePath.toString(), FILE_START, fileSize)
+            .getLocatedBlocks(), null);
   }
 
   private void printStats() throws IOException {
@@ -841,20 +842,20 @@ public class TestBlockReport {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Missing " + cluster.getNamesystem().getMissingBlocksCount());
       LOG.debug(
-          "Corrupted " + cluster.getNamesystem().getCorruptReplicaBlocks());
+              "Corrupted " + cluster.getNamesystem().getCorruptReplicaBlocks());
       LOG.debug("Under-replicated " + cluster.getNamesystem().
-          getUnderReplicatedBlocks());
+              getUnderReplicatedBlocks());
       LOG.debug("Pending delete " + cluster.getNamesystem().
-          getPendingDeletionBlocks());
+              getPendingDeletionBlocks());
       LOG.debug("Pending replications " + cluster.getNamesystem().
-          getPendingReplicationBlocks());
+              getPendingReplicationBlocks());
       LOG.debug("Excess " + cluster.getNamesystem().getExcessBlocks());
       LOG.debug("Total " + cluster.getNamesystem().getBlocksTotal());
     }
   }
 
   private ArrayList<Block> locatedToBlocks(final List<LocatedBlock> locatedBlks,
-      List<Integer> positionsToRemove) {
+                                           List<Integer> positionsToRemove) {
     ArrayList<Block> newList = new ArrayList<>();
     for (int i = 0; i < locatedBlks.size(); i++) {
       if (positionsToRemove != null && positionsToRemove.contains(i)) {
@@ -916,7 +917,7 @@ public class TestBlockReport {
   private static void initLoggers() {
     ((Log4JLogger) NameNode.stateChangeLog).getLogger().setLevel(Level.ALL);
     ((Log4JLogger) LogFactory.getLog(FSNamesystem.class)).getLogger()
-        .setLevel(Level.ALL);
+            .setLevel(Level.ALL);
     ((Log4JLogger) DataNode.LOG).getLogger().setLevel(Level.ALL);
     ((Log4JLogger) TestBlockReport.LOG).getLogger().setLevel(Level.ALL);
   }
@@ -924,14 +925,14 @@ public class TestBlockReport {
   private Block findBlock(Path path, long size) throws IOException {
     Block ret;
     List<LocatedBlock> lbs = cluster.getNameNodeRpc()
-        .getBlockLocations(path.toString(), FILE_START, size)
-        .getLocatedBlocks();
+            .getBlockLocations(path.toString(), FILE_START, size)
+            .getLocatedBlocks();
     LocatedBlock lb = lbs.get(lbs.size() - 1);
 
     // Get block from the first DN
     ret = cluster.getDataNodes().get(DN_N0).
-        data.getStoredBlock(lb.getBlock().getBlockPoolId(),
-        lb.getBlock().getBlockId());
+            data.getStoredBlock(lb.getBlock().getBlockPoolId(),
+            lb.getBlock().getBlockId());
     return ret;
   }
 
@@ -952,38 +953,38 @@ public class TestBlockReport {
       }
     }
   }
-  
+
   private static void resetConfiguration() {
     conf = new Configuration();
     int customPerChecksumSize = 512;
     int customBlockSize = customPerChecksumSize * 3;
     conf.setInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY,
-        customPerChecksumSize);
+            customPerChecksumSize);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, customBlockSize);
     conf.setLong(DFSConfigKeys.DFS_DATANODE_DIRECTORYSCAN_INTERVAL_KEY,
-        DN_RESCAN_INTERVAL);
+            DN_RESCAN_INTERVAL);
     conf.setInt(DFSConfigKeys.DFS_NUM_BUCKETS_KEY, DFSConfigKeys
-        .DFS_REPLICATION_DEFAULT);
+            .DFS_REPLICATION_DEFAULT);
     conf.setInt(DFSConfigKeys.DFS_NUM_BUCKETS_KEY, 100);
     NUM_BUCKETS = conf.getInt(DFSConfigKeys.DFS_NUM_BUCKETS_KEY, DFSConfigKeys
-        .DFS_NUM_BUCKETS_DEFAULT);
+            .DFS_NUM_BUCKETS_DEFAULT);
   }
 
 
-   @Test
+  @Test
   public void blockReportRegrssion() throws IOException {
     final String METHOD_NAME = GenericTestUtils.getMethodName();
 
 
     ArrayList<Block> blocks = new ArrayList<>();
-    
+
     for(int i = 0 ; i < 3; i++){
       Path filePath = new Path("/" + METHOD_NAME +i+ ".dat");
       DFSTestUtil
-        .createFile(fs, filePath, FILE_SIZE, REPL_FACTOR, rand.nextLong());
+              .createFile(fs, filePath, FILE_SIZE, REPL_FACTOR, rand.nextLong());
       blocks.addAll(locatedToBlocks(cluster.getNameNodeRpc()
-        .getBlockLocations(filePath.toString(), FILE_START, FILE_SIZE)
-        .getLocatedBlocks(), null));
+              .getBlockLocations(filePath.toString(), FILE_START, FILE_SIZE)
+              .getLocatedBlocks(), null));
     }
 
 
@@ -996,10 +997,10 @@ public class TestBlockReport {
     String poolId = cluster.getNamesystem().getBlockPoolId();
     DatanodeRegistration dnR = dn.getDNRegistrationForBP(poolId);
     StorageBlockReport[] report =
-        {new StorageBlockReport(new DatanodeStorage(dnR.getDatanodeUuid()),
-            BlockReport.builder(NUM_BUCKETS).addAllAsFinalized(blocks).build())};
+            {new StorageBlockReport(new DatanodeStorage(dnR.getDatanodeUuid()),
+                    BlockReport.builder(NUM_BUCKETS).addAllAsFinalized(blocks).build())};
     try{
-    cluster.getNameNodeRpc().blockReport(dnR, poolId, report);
+      cluster.getNameNodeRpc().blockReport(dnR, poolId, report);
     }catch(Exception e){
       fail("No exception was expected. Get "+e);
     }

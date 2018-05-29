@@ -669,7 +669,7 @@ class BlockPoolSliceScanner {
         }
         if (((now - getEarliestScanTime()) >= scanPeriod)
             || ((!blockInfoSet.isEmpty()) && !(this.isFirstBlockProcessed()))) {
-          verifyFirstBlock();
+          verifyFirstBlock(); // we are not calling this since provided-storage patch. Waiting for block report to pick up missing blocks.
         } else {
           if (LOG.isDebugEnabled()) {
             LOG.debug("All remaining blocks were processed recently, "
