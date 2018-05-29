@@ -481,13 +481,6 @@ public class DatanodeDescriptor extends DatanodeInfo {
         if (checkFailedStorages) {
           failedStorageInfos.remove(storage);
         }
-
-        storage.receivedHeartbeat(report);
-        totalCapacity += report.getCapacity();
-        totalRemaining += report.getRemaining();
-        totalBlockPoolUsed += report.getBlockPoolUsed();
-        totalDfsUsed += report.getDfsUsed();
-
         storage.receivedHeartbeat(report);
         // skip accounting for capacity of PROVIDED storages!
         if (StorageType.PROVIDED.equals(storage.getStorageType())) {
