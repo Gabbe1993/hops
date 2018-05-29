@@ -460,9 +460,9 @@ public class TestBalancer {
     assertEquals(capacities.length, racks.length);
     int numOfDatanodes = capacities.length;
     cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(0)
+        .numDataNodes(capacities.length)
         .racks(racks)
-       // .simulatedCapacities(capacities)
+        .simulatedCapacities(capacities)
         .build();
     try {
       cluster.waitActive();

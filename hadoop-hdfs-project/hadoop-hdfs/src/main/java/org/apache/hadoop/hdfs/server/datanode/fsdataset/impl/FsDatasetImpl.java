@@ -1872,14 +1872,14 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       String dir = null;
       final List<FsVolumeImpl> volumes = getVolumes();
       for (FsVolumeImpl vol : volumes) {
-        String bpDir = vol.getBaseURI().getPath(); // TODO: GABRIEL - test. Changed from getPath(bpid)
+        String bpDir = vol.getCurrentDir().getPath() + "/" + bpid; // TODO: GABRIEL - test. Changed from getPath(bpid)
         if (RollingLogsImpl.isFilePresent(bpDir, prefix)) {
           dir = bpDir;
           break;
         }
       }
       if (dir == null) {
-        dir = volumes.get(0).getBaseURI().getPath();
+        dir = volumes.get(0).getCurrentDir().getPath() + "/" + bpid;
       }
       return new RollingLogsImpl(dir, prefix);
     }
