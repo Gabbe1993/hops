@@ -239,7 +239,9 @@ public abstract class Storage extends StorageInfo {
   @InterfaceAudience.Private
   public static class StorageDirectory implements FormatConfirmable {
     final File root;              // root directory
-    final boolean useLock;        // flag to enable storage lock
+    // whether or not this dir is shared between two separate NNs for HA, or
+    // between multiple block pools in the case of federation.
+    final boolean isShared;
     final StorageDirType dirType; // storage dir type
     FileLock lock;                // storage lock
 
@@ -247,16 +249,15 @@ public abstract class Storage extends StorageInfo {
 
     private final StorageLocation location;
     public StorageDirectory(File dir) {
-      // default dirType is null
-      this(dir, null, true);
+      this(dir, null, false);
     }
 
     public StorageDirectory(StorageLocation location) {
-      this(null, true, location);
+      this(null, false, location);
     }
 
     public StorageDirectory(File dir, StorageDirType dirType) {
-      this(dir, dirType, true);
+      this(dir, dirType, false);
     }
 
     public void setStorageUuid(String storageUuid) {
@@ -269,43 +270,39 @@ public abstract class Storage extends StorageInfo {
 
     /**
      * Constructor
-     *
-     * @param dir
-     *     directory corresponding to the storage
-     * @param dirType
-     *     storage directory type
-     * @param useLock
-     *     true - enables locking on the storage directory and false
-     *     disables locking
+     * @param dir directory corresponding to the storage
+     * @param dirType storage directory type
+     * @param isShared whether or not this dir is shared between two NNs. true
+     *          disables locking on the storage directory, false enables locking
      */
-    public StorageDirectory(File dir, StorageDirType dirType, boolean useLock) {
-      this(dir, dirType, useLock, null);
+    public StorageDirectory(File dir, StorageDirType dirType, boolean isShared) {
+      this(dir, dirType, isShared, null);
     }
 
     /**
      * Constructor
      * @param dirType storage directory type
-     * @param useLock whether or not this dir is shared between two NNs. true
+     * @param isShared whether or not this dir is shared between two NNs. true
      *          disables locking on the storage directory, false enables locking
      * @param location the {@link StorageLocation} for this directory
      */
-    public StorageDirectory(StorageDirType dirType, boolean useLock,
+    public StorageDirectory(StorageDirType dirType, boolean isShared,
         StorageLocation location) {
-      this(getStorageLocationFile(location), dirType, useLock, location);
+      this(getStorageLocationFile(location), dirType, isShared, location);
     }
 
     /**
      * Constructor
      * @param bpid the block pool id
      * @param dirType storage directory type
-     * @param useLock whether or not this dir is shared between two NNs. true
+     * @param isShared whether or not this dir is shared between two NNs. true
      *          disables locking on the storage directory, false enables locking
      * @param location the {@link StorageLocation} for this directory
      */
     public StorageDirectory(String bpid, StorageDirType dirType,
-        boolean useLock, StorageLocation location) {
+        boolean isShared, StorageLocation location) {
       this(getBlockPoolCurrentDir(bpid, location), dirType,
-          useLock, location);
+          isShared, location);
     }
 
     private static File getBlockPoolCurrentDir(String bpid,
@@ -319,11 +316,11 @@ public abstract class Storage extends StorageInfo {
     }
 
     private StorageDirectory(File dir, StorageDirType dirType,
-        boolean useLock, StorageLocation location) {
+        boolean isShared, StorageLocation location) {
       this.root = dir;
       this.lock = null;
       this.dirType =  dirType;
-      this.useLock = useLock;
+      this.isShared = isShared;
       this.location = location;
       assert location == null || dir == null ||
           dir.getAbsolutePath().startsWith(
@@ -627,7 +624,12 @@ public abstract class Storage extends StorageInfo {
 
       this.lock(); // lock storage if it exists
 
+      // If startOpt is HOTSWAP, it returns NOT_FORMATTED for empty directory,
+      // while it also checks the layout version.
       if (startOpt == HdfsServerConstants.StartupOption.FORMAT) {
+        if (checkCurrentIsEmpty) {
+          checkEmptyCurrent();
+        }
         return StorageState.NOT_FORMATTED;
       }
 
@@ -655,6 +657,9 @@ public abstract class Storage extends StorageInfo {
         if (hasPrevious) {
           throw new InconsistentFSStateException(root,
               "version file in current directory is missing.");
+        }
+        if (checkCurrentIsEmpty) {
+          checkEmptyCurrent();
         }
         return StorageState.NOT_FORMATTED;
       }
@@ -796,6 +801,9 @@ public abstract class Storage extends StorageInfo {
       return true;
     }
 
+    public boolean isShared() {
+      return isShared;
+    }
 
     /**
      * Lock storage to provide exclusive access.
@@ -810,8 +818,8 @@ public abstract class Storage extends StorageInfo {
      *     if locking fails
      */
     public void lock() throws IOException {
-      if (!useLock) {
-        LOG.info("Locking is disabled");
+      if (isShared()) {
+        LOG.info("Locking is disabled for " + this.root);
         return;
       }
       FileLock newLock = tryLock();
@@ -1370,7 +1378,6 @@ public abstract class Storage extends StorageInfo {
   public static String getRegistrationID(StorageInfo storage) {
     return "NS-" + Integer.toString(storage.getNamespaceID()) + "-" +
         storage.getClusterID() + "-" +
-        Integer.toString(storage.getLayoutVersion()) + "-" +
         Long.toString(storage.getCTime());
   }
 
