@@ -486,6 +486,12 @@ public class DatanodeDescriptor extends DatanodeInfo {
         if (StorageType.PROVIDED.equals(storage.getStorageType())) {
           continue;
         }
+
+        totalCapacity += report.getCapacity();
+        totalRemaining += report.getRemaining();
+        totalBlockPoolUsed += report.getBlockPoolUsed();
+        totalDfsUsed += report.getDfsUsed();
+
       } catch (IOException ex) {
         LOG.error("could not handle storage report for storage: " + report.getStorage().getStorageID(), ex);
       }
