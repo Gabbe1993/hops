@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://localhost:60010</value>
+    </property>
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+    <property>
+        <name>hdfs.image.writer.block.class</name>
+        <value>org.apache.hadoop.hdfs.server.common.TextFileRegionFormat</value>
+    </property>
+    <property>
+        <name>hdfs.image.block.csv.read.path</name>
+        <value>/home/gabriel/Documents/hadoop-prototype/hadoop-run/blocks.csv</value>
+    </property>
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>/home/gabriel/Documents/hadoop-prototype/hadoop-run/hdfs/data/</value>
+    </property>
+    <property>
+        <name>dfs.datanode.address</name>
+        <value>localhost:51010</value>
+    </property>
+    <property>
+        <name>dfs.datanode.http.address</name>
+        <value>localhost:51075</value>
+    </property>
+    <property>
+        <name>dfs.datanode.ipc.address</name>
+        <value>localhost:51020</value>
+    </property>
+    <property>
+        <name>dfs.datanode.provided</name>
+        <value>true</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.access.key</name>
+        <description>AWS access key ID.
+            Omit for IAM role-based or provider-based authentication.</description>
+        <value>AKIAJXYWMR7VZDDAU5PA</value> <!-- read only access to s3 bucket -->
+    </property>
+
+    <property>
+        <name>fs.s3a.secret.key</name>
+        <description>AWS secret key.
+            Omit for IAM role-based or provider-based authentication.</description>
+        <value>Br6SVLUhRvjCVAM568OsNiwvK41XYooN1NfYoqIZ</value> <!-- read only access to s3 bucket -->
+    </property>
+
+    <property>
+        <name>fs.s3a.proxy.host</name>
+        <description>Hostname of the (optional) proxy server for S3 connections.</description>
+    </property>
+
+    <property>
+        <name>fs.s3a.proxy.port</name>
+        <description>Proxy server port. If this property is not set
+            but fs.s3a.proxy.host is, port 80 or 443 is assumed (consistent with
+            the value of fs.s3a.connection.ssl.enabled).</description>
+    </property>
+
+</configuration>
