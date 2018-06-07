@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -95,12 +96,16 @@ public class RandomTreeWalk extends TreeWalk {
     int nChildren = r.nextInt(children);
     ArrayList<TreePath> ret = new ArrayList<TreePath>();
     for (int i = 0; i < nChildren; ++i) {
-      ret.add(new TreePath(genFileStatus(p, r), p.getId(), walk, null));
+      try {
+        ret.add(new TreePath(genFileStatus(p, r), p.getId(), walk, null));
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
     }
     return ret;
   }
 
-  FileStatus genFileStatus(TreePath parent, Random r) {
+  FileStatus genFileStatus(TreePath parent, Random r) throws IOException {
     final int blocksize = 128 * (1 << 20);
     final Path name;
     final boolean isDir;
@@ -162,7 +167,12 @@ public class RandomTreeWalk extends TreeWalk {
 
     RandomTreeIterator(long seed) {
       Random r = new Random(seed);
-      FileStatus iroot = genFileStatus(null, r);
+      FileStatus iroot = null;
+      try {
+        iroot = genFileStatus(null, r);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
       getPendingQueue().addFirst(new TreePath(iroot, -1, this, null));
     }
 
