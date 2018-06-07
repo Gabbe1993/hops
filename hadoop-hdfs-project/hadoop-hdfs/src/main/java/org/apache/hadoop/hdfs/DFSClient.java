@@ -2514,6 +2514,7 @@ public class DFSClient implements java.io.Closeable {
         "listCorruptFileBlocks");
   }
 
+  // TODO: GABRIEL - the datanodes never seem to get populated
   public DatanodeInfo[] datanodeReport(final DatanodeReportType type)
       throws IOException {
     ClientActionHandler handler = new ClientActionHandler() {

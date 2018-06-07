@@ -53,7 +53,6 @@ public class TestMiniDFSCluster {
     testDataDir =
         new File(new File(testDataPath).getParentFile(), "miniclusters");
 
-
   }
 
   @After
