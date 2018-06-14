@@ -1,4 +1,21 @@
-package test.java.org.apache.hadoop.hdfs.server.namenode;
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.IOException;
 import java.util.Map;
@@ -15,24 +32,27 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 import static org.junit.Assert.*;
 
+/**
+ * Validate resolver assigning all paths to a single owner/group.
+ */
 public class TestSingleUGIResolver {
 
   @Rule public TestName name = new TestName();
 
-  static final int testuid = 10101;
-  static final int testgid = 10102;
-  static final String testuser = "tenaqvyybdhragqvatbf";
-  static final String testgroup = "tnyybcvatlnxf";
+  private static final int TESTUID = 10101;
+  private static final int TESTGID = 10102;
+  private static final String TESTUSER = "tenaqvyybdhragqvatbf";
+  private static final String TESTGROUP = "tnyybcvatlnxf";
 
-  SingleUGIResolver ugi = new SingleUGIResolver();
+  private SingleUGIResolver ugi = new SingleUGIResolver();
 
   @Before
   public void setup() {
     Configuration conf = new Configuration(false);
-    conf.setInt(SingleUGIResolver.UID, testuid);
-    conf.setInt(SingleUGIResolver.GID, testgid);
-    conf.set(SingleUGIResolver.USER, testuser);
-    conf.set(SingleUGIResolver.GROUP, testgroup);
+    conf.setInt(SingleUGIResolver.UID, TESTUID);
+    conf.setInt(SingleUGIResolver.GID, TESTGID);
+    conf.set(SingleUGIResolver.USER, TESTUSER);
+    conf.set(SingleUGIResolver.GROUP, TESTGROUP);
     ugi.setConf(conf);
     System.out.println(name.getMethodName());
   }
@@ -41,20 +61,20 @@ public class TestSingleUGIResolver {
   public void testRewrite() {
     FsPermission p1 = new FsPermission((short)0755);
     match(ugi.resolve(file("dingo", "dingo", p1)), p1);
-    match(ugi.resolve(file(testuser, "dingo", p1)), p1);
-    match(ugi.resolve(file("dingo", testgroup, p1)), p1);
-    match(ugi.resolve(file(testuser, testgroup, p1)), p1);
+    match(ugi.resolve(file(TESTUSER, "dingo", p1)), p1);
+    match(ugi.resolve(file("dingo", TESTGROUP, p1)), p1);
+    match(ugi.resolve(file(TESTUSER, TESTGROUP, p1)), p1);
 
     FsPermission p2 = new FsPermission((short)0x8000);
     match(ugi.resolve(file("dingo", "dingo", p2)), p2);
-    match(ugi.resolve(file(testuser, "dingo", p2)), p2);
-    match(ugi.resolve(file("dingo", testgroup, p2)), p2);
-    match(ugi.resolve(file(testuser, testgroup, p2)), p2);
+    match(ugi.resolve(file(TESTUSER, "dingo", p2)), p2);
+    match(ugi.resolve(file("dingo", TESTGROUP, p2)), p2);
+    match(ugi.resolve(file(TESTUSER, TESTGROUP, p2)), p2);
 
-    Map<Integer,String> ids = ugi.ugiMap();
+    Map<Integer, String> ids = ugi.ugiMap();
     assertEquals(2, ids.size());
-    assertEquals(testuser, ids.get(10101));
-    assertEquals(testgroup, ids.get(10102));
+    assertEquals(TESTUSER, ids.get(10101));
+    assertEquals(TESTGROUP, ids.get(10102));
   }
 
   @Test
@@ -67,7 +87,7 @@ public class TestSingleUGIResolver {
     }
     Configuration conf = new Configuration(false);
     ugi.setConf(conf);
-    Map<Integer,String> ids = ugi.ugiMap();
+    Map<Integer, String> ids = ugi.ugiMap();
     assertEquals(2, ids.size());
     assertEquals(user, ids.get(0));
     assertEquals(user, ids.get(1));
@@ -78,7 +98,7 @@ public class TestSingleUGIResolver {
     Configuration conf = ugi.getConf();
     conf.setInt(SingleUGIResolver.UID, (1 << 24) + 1);
     ugi.setConf(conf);
-    ugi.resolve(file(testuser, testgroup, new FsPermission((short)0777)));
+    ugi.resolve(file(TESTUSER, TESTGROUP, new FsPermission((short)0777)));
   }
 
   @Test(expected=IllegalArgumentException.class)
@@ -86,7 +106,7 @@ public class TestSingleUGIResolver {
     Configuration conf = ugi.getConf();
     conf.setInt(SingleUGIResolver.GID, (1 << 24) + 1);
     ugi.setConf(conf);
-    ugi.resolve(file(testuser, testgroup, new FsPermission((short)0777)));
+    ugi.resolve(file(TESTUSER, TESTGROUP, new FsPermission((short)0777)));
   }
 
   @Test(expected=IllegalStateException.class)
@@ -94,8 +114,8 @@ public class TestSingleUGIResolver {
     Configuration conf = new Configuration(false);
     conf.setInt(SingleUGIResolver.UID, 4344);
     conf.setInt(SingleUGIResolver.GID, 4344);
-    conf.set(SingleUGIResolver.USER, testuser);
-    conf.set(SingleUGIResolver.GROUP, testgroup);
+    conf.set(SingleUGIResolver.USER, TESTUSER);
+    conf.set(SingleUGIResolver.GROUP, TESTGROUP);
     ugi.setConf(conf);
     ugi.ugiMap();
   }
@@ -104,10 +124,10 @@ public class TestSingleUGIResolver {
     assertEquals(p, new FsPermission((short)(encoded & 0xFFFF)));
     long uid = (encoded >>> UGIResolver.USER_STRID_OFFSET);
     uid &= UGIResolver.USER_GROUP_STRID_MASK;
-    assertEquals(testuid, uid);
+    assertEquals(TESTUID, uid);
     long gid = (encoded >>> UGIResolver.GROUP_STRID_OFFSET);
     gid &= UGIResolver.USER_GROUP_STRID_MASK;
-    assertEquals(testgid, gid);
+    assertEquals(TESTGID, gid);
   }
 
   static FileStatus file(String user, String group, FsPermission perm) {

@@ -1,26 +1,47 @@
-package test.java.org.apache.hadoop.hdfs.server.namenode;
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.hdfs.server.namenode;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 
+/**
+ * Random, repeatable hierarchy generator.
+ */
+@InterfaceAudience.Private
+@InterfaceStability.Unstable
 public class RandomTreeWalk extends TreeWalk {
 
-  final Path root;
-  final long seed;
-  final float depth;
-  final int children;
-  final Map<Long,Long> mSeed;
-  final AtomicLong blockIds = new AtomicLong(1L << 30);
+  private final Path root;
+  private final long seed;
+  private final float depth;
+  private final int children;
+  private final Map<Long, Long> mSeed;
 
   RandomTreeWalk(long seed) {
     this(seed, 10);
@@ -31,14 +52,14 @@ public class RandomTreeWalk extends TreeWalk {
   }
 
   RandomTreeWalk(long seed, int children, float depth) {
-    this(randomRoot(seed), seed, children, 0.15f);
+    this(randomRoot(seed), seed, children, depth);
   }
 
   RandomTreeWalk(Path root, long seed, int children, float depth) {
     this.seed = seed;
     this.depth = depth;
     this.children = children;
-    mSeed = Collections.synchronizedMap(new HashMap<Long,Long>());
+    mSeed = Collections.synchronizedMap(new HashMap<Long, Long>());
     mSeed.put(-1L, seed);
     this.root = root;
   }
@@ -47,7 +68,7 @@ public class RandomTreeWalk extends TreeWalk {
     Random r = new Random(seed);
     String scheme;
     do {
-     scheme = genName(r, 3, 5).toLowerCase();
+      scheme = genName(r, 3, 5).toLowerCase();
     } while (Character.isDigit(scheme.charAt(0)));
     String authority = genName(r, 3, 15).toLowerCase();
     int port = r.nextInt(1 << 13) + 1000;
@@ -67,14 +88,14 @@ public class RandomTreeWalk extends TreeWalk {
       return Collections.emptyList();
     }
     // seed is f(parent seed, attrib)
-    long seed = mSeed.get(p.getParentId()) * p.getFileStatus().hashCode();
-    mSeed.put(p.getId(), seed);
-    Random r = new Random(seed);
+    long cseed = mSeed.get(p.getParentId()) * p.getFileStatus().hashCode();
+    mSeed.put(p.getId(), cseed);
+    Random r = new Random(cseed);
 
     int nChildren = r.nextInt(children);
     ArrayList<TreePath> ret = new ArrayList<TreePath>();
     for (int i = 0; i < nChildren; ++i) {
-      ret.add(new TreePath(genFileStatus(p, r), p.getId(), walk));
+      ret.add(new TreePath(genFileStatus(p, r), p.getId(), walk, null));
     }
     return ret;
   }
@@ -94,22 +115,18 @@ public class RandomTreeWalk extends TreeWalk {
     final long len = isDir ? 0 : r.nextInt(Integer.MAX_VALUE);
     final int nblocks = 0 == len ? 0 : (((int)((len - 1) / blocksize)) + 1);
     BlockLocation[] blocks = genBlocks(r, nblocks, blocksize, len);
-    try {
-      return new LocatedFileStatus(new FileStatus(
-          len,              /* long length,             */
-          isDir,            /* boolean isdir,           */
-          1,                /* int block_replication,   */
-          blocksize,        /* long blocksize,          */
-          0L,               /* long modification_time,  */
-          0L,               /* long access_time,        */
-          null,             /* FsPermission permission, */
-          "hadoop",         /* String owner,            */
-          "hadoop",         /* String group,            */
-          name),            /* Path path                */
-          blocks);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+    return new LocatedFileStatus(new FileStatus(
+        len,              /* long length,             */
+        isDir,            /* boolean isdir,           */
+        1,                /* int block_replication,   */
+        blocksize,        /* long blocksize,          */
+        0L,               /* long modification_time,  */
+        0L,               /* long access_time,        */
+        null,             /* FsPermission permission, */
+        "hadoop",         /* String owner,            */
+        "hadoop",         /* String group,            */
+        name),            /* Path path                */
+        blocks);
   }
 
   BlockLocation[] genBlocks(Random r, int nblocks, int blocksize, long len) {
@@ -145,20 +162,21 @@ public class RandomTreeWalk extends TreeWalk {
 
     RandomTreeIterator(long seed) {
       Random r = new Random(seed);
-      FileStatus root = genFileStatus(null, r);
-      pending.addFirst(new TreePath(root, -1, this));
+      FileStatus iroot = genFileStatus(null, r);
+      getPendingQueue().addFirst(new TreePath(iroot, -1, this, null));
     }
 
     RandomTreeIterator(TreePath p) {
-      pending.addFirst(new TreePath(p.getFileStatus(), p.getParentId(), this));
+      getPendingQueue().addFirst(
+          new TreePath(p.getFileStatus(), p.getParentId(), this, null));
     }
 
     @Override
     public TreeIterator fork() {
-      if (pending.isEmpty()) {
+      if (getPendingQueue().isEmpty()) {
         return new RandomTreeIterator();
       }
-      return new RandomTreeIterator(pending.removeFirst());
+      return new RandomTreeIterator(getPendingQueue().removeFirst());
     }
 
   }
