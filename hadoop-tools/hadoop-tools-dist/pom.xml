@@ -99,10 +99,10 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
- <!--   <dependency>
+   <!-- <dependency>
       <groupId>io.hops</groupId>
       <artifactId>hadoop-fs2img</artifactId>
-      <scope>compile</scope>
+      <scope>provided</scope>
       <version>${project.version}</version>
     </dependency>-->
   </dependencies>

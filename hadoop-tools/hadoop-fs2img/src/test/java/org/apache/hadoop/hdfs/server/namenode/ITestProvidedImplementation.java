@@ -17,57 +17,22 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.file.Files;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Random;
-import java.util.Set;
-
 import org.apache.commons.io.FileUtils;
-import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.StorageType;
-import org.apache.hadoop.hdfs.DFSClient;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.DFSTestUtil;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hdfs.StorageType;
+import org.apache.hadoop.hdfs.*;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.aliasmap.InMemoryAliasMap;
 import org.apache.hadoop.hdfs.server.aliasmap.InMemoryLevelDBAliasMapServer;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockManagerTestUtil;
-import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
-import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeManager;
-import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeStatistics;
-import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeStorageInfo;
-import org.apache.hadoop.hdfs.server.blockmanagement.ProvidedStorageMap;
+import org.apache.hadoop.hdfs.server.blockmanagement.*;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.InMemoryLevelDBAliasMapClient;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
-
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_REPLICATOR_CLASSNAME_KEY;
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_NAME_DIR_KEY;
-
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
@@ -80,6 +45,20 @@ import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.*;
+import java.io.Writer;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.file.Files;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Random;
+import java.util.Set;
+
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_REPLICATOR_CLASSNAME_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_NAME_DIR_KEY;
 import static org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap.fileNameFromBlockPoolID;
 import static org.apache.hadoop.net.NodeBase.PATH_SEPARATOR_STR;
 import static org.junit.Assert.*;
@@ -174,7 +153,7 @@ public class ITestProvidedImplementation {
   public void shutdown() throws Exception {
     try {
       if (cluster != null) {
-        cluster.shutdown(true, true);
+        cluster.shutdown();
       }
     } finally {
       cluster = null;
@@ -182,13 +161,13 @@ public class ITestProvidedImplementation {
   }
 
   void createImage(TreeWalk t, Path out,
-      Class<? extends BlockResolver> blockIdsClass) throws Exception {
+                   Class<? extends BlockResolver> blockIdsClass) throws Exception {
     createImage(t, out, blockIdsClass, "", TextFileRegionAliasMap.class);
   }
 
   void createImage(TreeWalk t, Path out,
-      Class<? extends BlockResolver> blockIdsClass, String clusterID,
-      Class<? extends BlockAliasMap> aliasMapClass) throws Exception {
+                   Class<? extends BlockResolver> blockIdsClass, String clusterID,
+                   Class<? extends BlockAliasMap> aliasMapClass) throws Exception {
     ImageWriter.Options opts = ImageWriter.defaults();
     opts.setConf(conf);
     opts.output(out.toString())
@@ -203,17 +182,17 @@ public class ITestProvidedImplementation {
     }
   }
   void startCluster(Path nspath, int numDatanodes,
-      StorageType[] storageTypes,
-      StorageType[][] storageTypesPerDatanode,
-      boolean doFormat) throws IOException {
+                    StorageType[] storageTypes,
+                    StorageType[][] storageTypesPerDatanode,
+                    boolean doFormat) throws IOException {
     startCluster(nspath, numDatanodes, storageTypes, storageTypesPerDatanode,
         doFormat, null);
   }
 
   void startCluster(Path nspath, int numDatanodes,
-      StorageType[] storageTypes,
-      StorageType[][] storageTypesPerDatanode,
-      boolean doFormat, String[] racks) throws IOException {
+                    StorageType[] storageTypes,
+                    StorageType[][] storageTypesPerDatanode,
+                    boolean doFormat, String[] racks) throws IOException {
     conf.set(DFS_NAMENODE_NAME_DIR_KEY, nspath.toString());
 
     if (storageTypesPerDatanode != null) {
@@ -453,7 +432,7 @@ public class ITestProvidedImplementation {
   }
 
   private BlockLocation[] createFile(Path path, short replication,
-      long fileLen, long blockLen) throws IOException {
+                                     long fileLen, long blockLen) throws IOException {
     FileSystem fs = cluster.getFileSystem();
     // create a file that is not provided
     DFSTestUtil.createFile(fs, path, false, (int) blockLen,
@@ -479,7 +458,7 @@ public class ITestProvidedImplementation {
   }
 
   private DatanodeInfo[] getAndCheckBlockLocations(DFSClient client,
-      String filename, long fileLen, long expectedBlocks, int expectedLocations)
+                                                   String filename, long fileLen, long expectedBlocks, int expectedLocations)
       throws IOException {
     LocatedBlocks locatedBlocks = client.getLocatedBlocks(filename, 0, fileLen);
     // given the start and length in the above call,
@@ -804,12 +783,12 @@ public class ITestProvidedImplementation {
   }
 
   private DatanodeDescriptor getDatanodeDescriptor(DatanodeManager dnm,
-      int dnIndex) throws Exception {
+                                                   int dnIndex) throws Exception {
     return dnm.getDatanode(cluster.getDataNodes().get(dnIndex).getDatanodeId());
   }
 
   private void startDecommission(FSNamesystem namesystem, DatanodeManager dnm,
-      int dnIndex) throws Exception {
+                                 int dnIndex) throws Exception {
     namesystem.writeLock();
     DatanodeDescriptor dnDesc = getDatanodeDescriptor(dnm, dnIndex);
     dnm.getDatanodeAdminManager().startDecommission(dnDesc);
@@ -817,7 +796,7 @@ public class ITestProvidedImplementation {
   }
 
   private void startMaintenance(FSNamesystem namesystem, DatanodeManager dnm,
-      int dnIndex) throws Exception {
+                                int dnIndex) throws Exception {
     namesystem.writeLock();
     DatanodeDescriptor dnDesc = getDatanodeDescriptor(dnm, dnIndex);
     dnm.getDatanodeAdminManager().startMaintenance(dnDesc, Long.MAX_VALUE);
@@ -825,7 +804,7 @@ public class ITestProvidedImplementation {
   }
 
   private void stopMaintenance(FSNamesystem namesystem, DatanodeManager dnm,
-      int dnIndex) throws Exception {
+                               int dnIndex) throws Exception {
     namesystem.writeLock();
     DatanodeDescriptor dnDesc = getDatanodeDescriptor(dnm, dnIndex);
     dnm.getDatanodeAdminManager().stopMaintenance(dnDesc);

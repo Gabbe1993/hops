@@ -1,4 +1,21 @@
-package main.java.org.apache.hadoop.hdfs.server.namenode;
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -6,15 +23,22 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+/**
+ * Traversal of an external FileSystem.
+ */
+@InterfaceAudience.Public
+@InterfaceStability.Unstable
 public class FSTreeWalk extends TreeWalk {
 
-  final Path root;
-  final FileSystem fs;
+  private final Path root;
+  private final FileSystem fs;
 
   public FSTreeWalk(Path root, Configuration conf) throws IOException {
     this.root = root;
@@ -22,15 +46,16 @@ public class FSTreeWalk extends TreeWalk {
   }
 
   @Override
-  protected Iterable<TreePath> getChildren(TreePath p, long id, TreeIterator i) {
+  protected Iterable<TreePath> getChildren(TreePath path, int id,
+      TreeIterator i) {
     // TODO symlinks
-    if (!p.getFileStatus().isDirectory()) {
+    if (!path.getFileStatus().isDirectory()) {
       return Collections.emptyList();
     }
     try {
       ArrayList<TreePath> ret = new ArrayList<>();
-      for (FileStatus s : fs.listStatus(p.getFileStatus().getPath())) {
-        ret.add(new TreePath(s, id, i));
+      for (FileStatus s : fs.listStatus(path.getFileStatus().getPath())) {
+        ret.add(new TreePath(s, id, i, fs));
       }
       return ret;
     } catch (FileNotFoundException e) {
@@ -46,13 +71,14 @@ public class FSTreeWalk extends TreeWalk {
     }
 
     FSTreeIterator(TreePath p) {
-      pending.addFirst(new TreePath(p.getFileStatus(), p.getParentId(), this));
+      getPendingQueue().addFirst(
+          new TreePath(p.getFileStatus(), p.getParentId(), this, fs));
     }
 
     FSTreeIterator(Path p) throws IOException {
       try {
         FileStatus s = fs.getFileStatus(root);
-        pending.addFirst(new TreePath(s, -1L, this));
+        getPendingQueue().addFirst(new TreePath(s, -1, this, fs));
       } catch (FileNotFoundException e) {
         if (p.equals(root)) {
           throw e;
@@ -63,10 +89,10 @@ public class FSTreeWalk extends TreeWalk {
 
     @Override
     public TreeIterator fork() {
-      if (pending.isEmpty()) {
+      if (getPendingQueue().isEmpty()) {
         return new FSTreeIterator();
       }
-      return new FSTreeIterator(pending.removeFirst());
+      return new FSTreeIterator(getPendingQueue().removeFirst());
     }
 
   }

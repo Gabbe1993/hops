@@ -1,8 +1,29 @@
-package main.java.org.apache.hadoop.hdfs.server.namenode;
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.File;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import io.hops.metadata.adaptor.INodeDALAdaptor;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -10,17 +31,26 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.server.common.BlockFormat;
+import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
+import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
+/**
+ * Create FSImage from an external namespace.
+ */
+@InterfaceAudience.Public
+@InterfaceStability.Unstable
 public class FileSystemImage implements Tool {
 
-  Configuration conf;
+  private Configuration conf;
 
   @Override
   public Configuration getConf() {
@@ -49,6 +79,8 @@ public class FileSystemImage implements Tool {
     options.addOption("b", "blockclass", true, "Block output class");
     options.addOption("i", "blockidclass", true, "Block resolver class");
     options.addOption("c", "cachedirs", true, "Max active dirents");
+    options.addOption("cid", "clusterID", true, "Cluster ID");
+    options.addOption("bpid", "blockPoolID", true, "Block Pool ID");
     options.addOption("h", "help", false, "Print usage");
     return options;
   }
@@ -61,7 +93,7 @@ public class FileSystemImage implements Tool {
     try {
       cmd = parser.parse(options, argv);
     } catch (ParseException e) {
-      System.err.println(
+      System.out.println(
         "Error parsing command-line options: " + e.getMessage());
       printUsage();
       return -1;
@@ -84,7 +116,7 @@ public class FileSystemImage implements Tool {
           break;
         case "b":
           opts.blocks(
-              Class.forName(o.getValue()).asSubclass(BlockFormat.class));
+            Class.forName(o.getValue()).asSubclass(BlockAliasMap.class));
           break;
         case "i":
           opts.blockIds(
@@ -93,24 +125,43 @@ public class FileSystemImage implements Tool {
         case "c":
           opts.cache(Integer.parseInt(o.getValue()));
           break;
+      case "cid":
+        opts.clusterID(o.getValue());
+        break;
+      case "bpid":
+        opts.blockPoolID(o.getValue());
+        break;
         default:
-          throw new UnsupportedOperationException("Internal error");
+        throw new UnsupportedOperationException(
+            "Unknown option: " + o.getOpt());
       }
     }
 
     String[] rem = cmd.getArgs();
     if (rem.length != 1) {
-      System.err.println("Left-over non-recognized arguments: " + Arrays.toString(rem));
       printUsage();
       return -1;
     }
 
+    List<INode> inodes = new ArrayList<>();
+    List<BlockInfo> blocks = new ArrayList<>();
     try (ImageWriter w = new ImageWriter(opts)) {
       for (TreePath e : new FSTreeWalk(new Path(rem[0]), getConf())) {
-        w.accept(e); // add and continue
+        inodes.add(w.accept(e)); // add and continue
+        blocks.addAll(e.getBlockInfos());
       }
+      persistInodes(inodes);
+      persistBlocks(blocks);
     }
     return 0;
+  }
+
+  private void persistBlocks(List<BlockInfo> blocks) {
+    // TODO : GABRIEL
+  }
+
+  private void persistInodes(List<INode> inodes) {
+     // TODO : GABRIEL
   }
 
   public static void main(String[] argv) throws Exception {

@@ -17,18 +17,19 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import java.util.Iterator;
-import java.util.Random;
-
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockProto;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
+
+import java.util.Iterator;
+import java.util.Random;
+
 import static org.junit.Assert.*;
 
 /**
@@ -53,7 +54,7 @@ public class TestFixedBlockResolver {
   public void testExactBlock() throws Exception {
     FileStatus f = file(512, 256);
     int nblocks = 0;
-    for (BlockProto b : blockId.resolve(f)) {
+    for (Block b : blockId.resolve(f)) {
       ++nblocks;
       assertEquals(512L * (1L << 20), b.getNumBytes());
     }
@@ -61,7 +62,7 @@ public class TestFixedBlockResolver {
 
     FileStatus g = file(1024, 256);
     nblocks = 0;
-    for (BlockProto b : blockId.resolve(g)) {
+    for (Block b : blockId.resolve(g)) {
       ++nblocks;
       assertEquals(512L * (1L << 20), b.getNumBytes());
     }
@@ -69,7 +70,7 @@ public class TestFixedBlockResolver {
 
     FileStatus h = file(5120, 256);
     nblocks = 0;
-    for (BlockProto b : blockId.resolve(h)) {
+    for (Block b : blockId.resolve(h)) {
       ++nblocks;
       assertEquals(512L * (1L << 20), b.getNumBytes());
     }
@@ -79,7 +80,7 @@ public class TestFixedBlockResolver {
   @Test
   public void testEmpty() throws Exception {
     FileStatus f = file(0, 100);
-    Iterator<BlockProto> b = blockId.resolve(f).iterator();
+    Iterator<Block> b = blockId.resolve(f).iterator();
     assertTrue(b.hasNext());
     assertEquals(0, b.next().getNumBytes());
     assertFalse(b.hasNext());
@@ -96,7 +97,7 @@ public class TestFixedBlockResolver {
     int blk = r.nextInt(len - 128) + 128;
     FileStatus s = file(len, blk);
     long nbytes = 0;
-    for (BlockProto b : blockId.resolve(s)) {
+    for (Block b : blockId.resolve(s)) {
       nbytes += b.getNumBytes();
       assertTrue(512L * (1L << 20) >= b.getNumBytes());
     }

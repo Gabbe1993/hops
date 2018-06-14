@@ -1,4 +1,4 @@
-package main.java.org.apache.hadoop.hdfs.server.namenode;
+package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -57,6 +57,11 @@ public class NullBlockFormat extends BlockFormat<FileRegion> {
         // do nothing
       }
     };
+  }
+
+  @Override
+  public void refresh() throws IOException {
+
   }
 
 }

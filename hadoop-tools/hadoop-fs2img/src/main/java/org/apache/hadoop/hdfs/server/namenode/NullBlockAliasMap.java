@@ -37,7 +37,7 @@ public class NullBlockAliasMap extends BlockAliasMap<FileRegion> {
 
   @Override
   public Reader<FileRegion> getReader(Reader.Options opts, String blockPoolID)
-      throws IOException {
+          throws IOException {
     return new Reader<FileRegion>() {
       @Override
       public Iterator<FileRegion> iterator() {
@@ -71,7 +71,7 @@ public class NullBlockAliasMap extends BlockAliasMap<FileRegion> {
 
   @Override
   public Writer getWriter(Writer.Options opts, String blockPoolID)
-      throws IOException {
+          throws IOException {
     return new Writer<FileRegion>() {
       @Override
       public void store(FileRegion token) throws IOException {

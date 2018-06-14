@@ -1,31 +1,19 @@
 package org.apache.hadoop.hdfs.server.common;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.NoSuchElementException;
-
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.protocol.ProvidedStorageLocation;
 import org.apache.hadoop.io.MultipleIOException;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
 
-import com.google.common.annotations.VisibleForTesting;
+import java.io.*;
+import java.util.*;
 
 // TODO: refactor to abstract file format
 // TODO: move delimiter to common
@@ -101,10 +89,15 @@ public class TextFileRegionFormat
     return createWriter(o.file, null, o.delim, conf);
   }
 
+  @Override
+  public void refresh() throws IOException {
+
+  }
+
   @VisibleForTesting
   // TODO move test to same package, reduce visibility
   public TextWriter createWriter(Path file, CompressionCodec codec, String delim,
-      Configuration conf) throws IOException {
+                                 Configuration conf) throws IOException {
     FileSystem fs = file.getFileSystem(conf);
     if (fs instanceof LocalFileSystem) {
       fs = ((LocalFileSystem)fs).getRaw();
@@ -222,13 +215,13 @@ public class TextFileRegionFormat
     private final Map<FRIterator,BufferedReader> iterators;
 
     protected TextReader(FileSystem fs, Path file, CompressionCodec codec,
-        String delim) {
+                         String delim) {
       this(fs, file, codec, delim,
           new IdentityHashMap<FRIterator,BufferedReader>());
     }
 
     TextReader(FileSystem fs, Path file, CompressionCodec codec, String delim,
-        Map<FRIterator,BufferedReader> iterators) {
+               Map<FRIterator,BufferedReader> iterators) {
       this.fs = fs;
       this.file = file;
       this.codec = codec;
@@ -372,10 +365,12 @@ public class TextFileRegionFormat
 
     @Override
     public void store(FileRegion token) throws IOException {
+      ProvidedStorageLocation location = token.getProvidedStorageLocation();
+
       out.append(String.valueOf(token.getBlock().getBlockId())).append(delim);
-      out.append(token.path.toString()).append(delim);
-      out.append(Long.toString(token.offset)).append(delim);
-      out.append(Long.toString(token.length)).append("\n");
+      out.append(location.getPath().toString()).append(delim);
+      out.append(Long.toString(location.getOffset())).append(delim);
+      out.append(Long.toString(location.getLength())).append("\n");
     }
 
     @Override

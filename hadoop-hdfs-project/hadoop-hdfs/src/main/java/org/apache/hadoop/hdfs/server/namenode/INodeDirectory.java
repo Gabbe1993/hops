@@ -565,4 +565,5 @@ public class INodeDirectory extends INode {
     rootINodeIdentifier.setDepth(INodeDirectory.ROOT_DIR_DEPTH);
     return rootINodeIdentifier;
   }
+
 }

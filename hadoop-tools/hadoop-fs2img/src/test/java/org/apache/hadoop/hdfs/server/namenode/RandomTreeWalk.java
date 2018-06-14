@@ -17,18 +17,15 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+
+import java.io.IOException;
+import java.util.*;
 
 /**
  * Random, repeatable hierarchy generator.
@@ -82,7 +79,7 @@ public class RandomTreeWalk extends TreeWalk {
 
   @Override
   protected Iterable<TreePath> getChildren(TreePath p, long id,
-      TreeIterator walk) {
+                                           TreeIterator walk) {
     final FileStatus pFs = p.getFileStatus();
     if (pFs.isFile()) {
       return Collections.emptyList();
@@ -115,18 +112,23 @@ public class RandomTreeWalk extends TreeWalk {
     final long len = isDir ? 0 : r.nextInt(Integer.MAX_VALUE);
     final int nblocks = 0 == len ? 0 : (((int)((len - 1) / blocksize)) + 1);
     BlockLocation[] blocks = genBlocks(r, nblocks, blocksize, len);
-    return new LocatedFileStatus(new FileStatus(
-        len,              /* long length,             */
-        isDir,            /* boolean isdir,           */
-        1,                /* int block_replication,   */
-        blocksize,        /* long blocksize,          */
-        0L,               /* long modification_time,  */
-        0L,               /* long access_time,        */
-        null,             /* FsPermission permission, */
-        "hadoop",         /* String owner,            */
-        "hadoop",         /* String group,            */
-        name),            /* Path path                */
-        blocks);
+    try {
+      return new LocatedFileStatus(new FileStatus(
+          len,              /* long length,             */
+          isDir,            /* boolean isdir,           */
+          1,                /* int block_replication,   */
+          blocksize,        /* long blocksize,          */
+          0L,               /* long modification_time,  */
+          0L,               /* long access_time,        */
+          null,             /* FsPermission permission, */
+          "hadoop",         /* String owner,            */
+          "hadoop",         /* String group,            */
+          name),            /* Path path                */
+          blocks);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return null;
   }
 
   BlockLocation[] genBlocks(Random r, int nblocks, int blocksize, long len) {
