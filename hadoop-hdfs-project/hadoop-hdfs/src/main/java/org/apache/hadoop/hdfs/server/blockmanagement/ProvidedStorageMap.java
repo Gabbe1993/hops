@@ -69,8 +69,7 @@ public class ProvidedStorageMap {
   private int defaultReplication;
 
   ProvidedStorageMap(BlockManager bm, Configuration conf) throws IOException {
-    // TODO: GABRIEL - do we need RwLock ? Else remove the other constructor
-     this(null, bm, conf);
+    this(null, bm, conf);
   }
 
   ProvidedStorageMap(RwLock lock, BlockManager bm, Configuration conf)
@@ -342,7 +341,7 @@ public class ProvidedStorageMap {
 
     /*
     try {
-        globalStorageMap.updateStorage(storage); // TODO: GABRIEL - updating NDB fails in tests
+        globalStorageMap.updateStorage(storage); // GABRIEL - not added to ndb
       } catch (IOException e) {
         e.printStackTrace();
       }

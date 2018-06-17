@@ -423,8 +423,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
         throw e;
       }
     } catch (IOException e) {
-    //  IOUtils.cleanup(null, ref); // TODO: GABRIEL - do we need FsVolumeReference for cleanup (since it's closeables) ?
-      throw e;
+       throw e;
     }
   }
 
@@ -1872,7 +1871,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       String dir = null;
       final List<FsVolumeImpl> volumes = getVolumes();
       for (FsVolumeImpl vol : volumes) {
-        String bpDir = vol.getCurrentDir().getPath() + "/" + bpid; // TODO: GABRIEL - test. Changed from getPath(bpid)
+        String bpDir = vol.getCurrentDir().getPath() + "/" + bpid;
         if (RollingLogsImpl.isFilePresent(bpDir, prefix)) {
           dir = bpDir;
           break;

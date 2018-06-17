@@ -172,7 +172,6 @@ class BlockPoolSlice {
   File addFinalizedBlock(Block b, ReplicaInfo replicaInfo) throws IOException {
     File f = ((LocalReplica)replicaInfo).getBlockFile();
 
-    // fileIoProvider.mkdirsWithExistsCheck(volume, f); // TODO: GABRIEL - java.io.IOException: Mkdirs failed to create
     File blockFile = finalizedDir.addBlock(b, replicaInfo, f);
 
     File metaFile =
@@ -224,7 +223,7 @@ class BlockPoolSlice {
                 .setLength(block.getNumBytes())
                 .setGenerationStamp(genStamp)
                 .setFsVolume(volume)
-                .setDirectoryToUse(blockFile.getParentFile()) // TODO: GABRIEL - test if correct dir
+                .setDirectoryToUse(blockFile.getParentFile())
                 .build();
       } else {
         newReplica = new ReplicaBuilder(HdfsServerConstants.ReplicaState.RWR)
@@ -340,7 +339,7 @@ class BlockPoolSlice {
           final ReplicaInfo replica1, final ReplicaInfo replica2,
           final ReplicaMap volumeMap) throws IOException {
 
-    // TODO: GABRIEL - implement. Now returning first replica
+    // GABRIEL - implement. Now returning first replica
 
     return replica1;
   }

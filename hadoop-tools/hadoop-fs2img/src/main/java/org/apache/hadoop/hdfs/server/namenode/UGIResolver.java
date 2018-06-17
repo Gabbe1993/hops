@@ -90,6 +90,14 @@ public abstract class UGIResolver {
     return ret;
   }
 
+  public Integer getUserId(String name) {
+    return users.get(name);
+  }
+
+  public Integer getGroupId(String group) {
+    return groups.get(group);
+  }
+
   public abstract void addUser(String name);
 
   protected void addUser(String name, int id) {

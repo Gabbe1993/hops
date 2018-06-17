@@ -17,20 +17,6 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
-import com.google.protobuf.ByteString;
-
-import io.hops.common.Pair;
-import io.hops.metadata.HdfsStorageFactory;
-import io.hops.metadata.adaptor.BlockInfoDALAdaptor;
-import io.hops.metadata.common.EntityDataAccess;
-import io.hops.metadata.hdfs.dal.SafeBlocksDataAccess;
-import io.hops.transaction.handler.HDFSOperationType;
-import io.hops.transaction.handler.LightWeightRequestHandler;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.FileStatus;
@@ -38,14 +24,18 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Options;
 import org.apache.hadoop.fs.PathHandle;
 import org.apache.hadoop.fs.permission.PermissionStatus;
-import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
-import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockProto;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.apache.hadoop.hdfs.server.common.FileRegion;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import static org.apache.hadoop.hdfs.DFSUtil.LOG;
+import static org.apache.hadoop.hdfs.DFSUtil.getNameNodesRPCAddresses;
 import static org.apache.hadoop.hdfs.DFSUtil.string2Bytes;
 
 /**
@@ -81,7 +71,7 @@ public class TreePath {
     return parentId;
   }
 
-  public long getId() {
+  public int getId() {
     if (id < 0) {
       throw new IllegalStateException();
     }
@@ -94,7 +84,7 @@ public class TreePath {
   }
 
   public INode toINode(UGIResolver ugi, BlockResolver blk,
-      BlockAliasMap.Writer<FileRegion> out) throws IOException {
+                           BlockAliasMap.Writer<FileRegion> out) throws IOException {
     if (stat.isFile()) {
       return toFile(ugi, blk, out);
     } else if (stat.isDirectory()) {
@@ -130,8 +120,8 @@ public class TreePath {
         (pathHandle != null ? pathHandle.toByteArray() : new byte[0])));
   }
 
-  INode toFile(UGIResolver ugi, BlockResolver blk,
-      BlockAliasMap.Writer<FileRegion> out) throws IOException {
+  INodeFile toFile(UGIResolver ugi, BlockResolver blk,
+               BlockAliasMap.Writer<FileRegion> out) throws IOException {
     final FileStatus s = getFileStatus();
     ugi.addUser(s.getOwner());
     ugi.addGroup(s.getGroup());
@@ -144,6 +134,7 @@ public class TreePath {
             blk.preferredBlockSize(s),
             HdfsConstants.PROVIDED_STORAGE_POLICY_ID);
 
+    setProperties(inode, s, ugi);
     // pathhandle allows match as long as the file matches exactly.
     PathHandle pathHandle = null;
     if (fs != null) {
@@ -151,41 +142,47 @@ public class TreePath {
         pathHandle = fs.getPathHandle(s, Options.HandleOpt.exact());
       } catch (UnsupportedOperationException e) {
         LOG.warn(
-            "Exact path handle not supported by filesystem " + fs.toString());
+                "Exact path handle not supported by filesystem " + fs.toString());
       }
     }
+    blocks = new ArrayList<>();
     // TODO: storage policy should be configurable per path; use BlockResolver
     long off = 0L;
-    Iterable<BlockInfo> blks = blk.resolve(s);
     for (BlockInfo block : blk.resolve(s)) {
       blocks.add(block);
       writeBlock(block.getBlockId(), off, block.getNumBytes(),
-          block.getGenerationStamp(), pathHandle, out);
+              block.getGenerationStamp(), pathHandle, out);
+      block.setINodeIdNoPersistance(id);
       off += block.getNumBytes();
     }
-    inode.setIdNoPersistance(id);
-    inode.setLocalNameNoPersistance(string2Bytes(s.getPath().getName()));
+
     return inode;
   }
 
-  INode toDirectory(UGIResolver ugi) throws IOException {
+  private void setProperties(INode inode, FileStatus s, UGIResolver ugi) {
+    inode.setIdNoPersistance(id);
+    inode.setLocalNameNoPersistance(string2Bytes(s.getPath().getName()));
+    inode.setUserIDNoPersistance(ugi.getUserId(ugi.user(s)));
+    inode.setGroupIDNoPersistance(ugi.getGroupId(ugi.group(s)));
+    inode.setPartitionIdNoPersistance(0);
+  }
+
+
+  INodeDirectoryWithQuota toDirectory(UGIResolver ugi) throws IOException {
     final FileStatus s = getFileStatus();
     ugi.addUser(s.getOwner());
     ugi.addGroup(s.getGroup());
 
-    INodeDirectory dir = new INodeDirectory(
-            string2Bytes(s.getPath().getName()),
-            new PermissionStatus(ugi.user(s), ugi.group(s), ugi.permission(s)),
-            s.getModificationTime());
+    INodeDirectoryWithQuota inodeDir = new INodeDirectoryWithQuota(
+            s.getPath().getName(),
+            new PermissionStatus(ugi.user(s), ugi.group(s), ugi.permission(s)));
 
-    INodeDirectoryWithQuota dirQ = new INodeDirectoryWithQuota(
-            DEFAULT_NAMESPACE_QUOTA,
-            DEFAULT_STORAGE_SPACE_QUOTA,
-            dir);
-    dirQ.setIdNoPersistance(id);
-    dirQ.setLocalNameNoPersistance(string2Bytes(s.getPath().getName()));
+    inodeDir.setModificationTimeNoPersistance(s.getModificationTime());
+    inodeDir.setAccessTimeNoPersistance(s.getAccessTime());
 
-    return dirQ;
+    setProperties(inodeDir, s, ugi);
+
+    return inodeDir;
   }
 
   @Override

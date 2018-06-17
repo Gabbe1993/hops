@@ -1191,6 +1191,9 @@ public abstract class Storage extends StorageInfo {
   }
 
   public void writeProperties(File to, StorageDirectory sd) throws IOException {
+    if (to == null) {
+      return;
+    }
     Properties props = new Properties();
     setPropertiesFromFields(props, sd);
     RandomAccessFile file = new RandomAccessFile(to, "rws");

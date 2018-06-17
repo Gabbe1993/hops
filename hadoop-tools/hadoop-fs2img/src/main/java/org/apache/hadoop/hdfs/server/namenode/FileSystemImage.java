@@ -18,12 +18,16 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.util.*;
 
+import io.hops.metadata.HdfsStorageFactory;
+import io.hops.metadata.adaptor.BlockInfoDALAdaptor;
 import io.hops.metadata.adaptor.INodeDALAdaptor;
+import io.hops.metadata.hdfs.dal.BlockInfoDataAccess;
+import io.hops.metadata.hdfs.dal.INodeDataAccess;
+import io.hops.transaction.handler.HDFSOperationType;
+import io.hops.transaction.handler.LightWeightRequestHandler;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -36,7 +40,6 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -145,24 +148,25 @@ public class FileSystemImage implements Tool {
 
     List<INode> inodes = new ArrayList<>();
     List<BlockInfo> blocks = new ArrayList<>();
+
     try (ImageWriter w = new ImageWriter(opts)) {
       for (TreePath e : new FSTreeWalk(new Path(rem[0]), getConf())) {
-        inodes.add(w.accept(e)); // add and continue
-        blocks.addAll(e.getBlockInfos());
+        INode inode = w.accept(e);
+        inodes.add(inode);
+        if(inode instanceof INodeFile)
+          blocks.addAll(e.getBlockInfos());  // GABRIEL - test. only adding blocks if file and not directory
       }
-      persistInodes(inodes);
-      persistBlocks(blocks);
+      w.persistBlocks(blocks);
+      w.persistInodes(inodes);
+
+    } catch (IOException e) {
+      e.printStackTrace();
     }
     return 0;
   }
 
-  private void persistBlocks(List<BlockInfo> blocks) {
-    // TODO : GABRIEL
-  }
 
-  private void persistInodes(List<INode> inodes) {
-     // TODO : GABRIEL
-  }
+
 
   public static void main(String[] argv) throws Exception {
     int ret = ToolRunner.run(new FileSystemImage(), argv);

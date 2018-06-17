@@ -54,7 +54,7 @@ public class TestProvidedStorageMap {
             providedStorageID);
     conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_PROVIDED_ENABLED, true);
     conf.setClass(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_CLASS,
-        TestProvidedImpl.TestFileRegionBlockAliasMap.class, // TODO: GABRIEL - do we need to add a child?
+        TestProvidedImpl.TestFileRegionBlockAliasMap.class,
         BlockAliasMap.class);
     blockPoolID = "BP-12344-10.1.1.2-12344";
     bm = mock(BlockManager.class);

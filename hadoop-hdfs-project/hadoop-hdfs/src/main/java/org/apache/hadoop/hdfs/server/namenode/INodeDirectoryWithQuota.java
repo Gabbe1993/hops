@@ -46,7 +46,7 @@ public class INodeDirectoryWithQuota extends INodeDirectory {
       throws IOException {
     super(other);
     INode.DirCounts counts = new INode.DirCounts();
-    other.spaceConsumedInTree(counts);
+    other.spaceConsumedInTree(counts); // TODO: GABRIEL - calls other before it is persisted in ndb
     createINodeAttributes(nsQuota, counts.getNsCount(), dsQuota,
         counts.getDsCount());
     setQuota(nsQuota, dsQuota);

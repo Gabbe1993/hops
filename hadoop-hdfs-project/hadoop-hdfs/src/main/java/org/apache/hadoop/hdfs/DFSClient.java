@@ -1344,7 +1344,7 @@ public class DFSClient implements java.io.Closeable {
   public DFSInputStream open(HdfsPathHandle fd, int buffersize,
                              boolean verifyChecksum) throws IOException {
 
-    // TODO: GABRIEL - implement HDFS-12882 ?
+    // GABRIEL - implement HDFS-12882 ?
     throw new UnsupportedOperationException();
   }
 
@@ -2514,7 +2514,7 @@ public class DFSClient implements java.io.Closeable {
         "listCorruptFileBlocks");
   }
 
-  // TODO: GABRIEL - the datanodes never seem to get populated
+
   public DatanodeInfo[] datanodeReport(final DatanodeReportType type)
       throws IOException {
     ClientActionHandler handler = new ClientActionHandler() {

@@ -564,7 +564,7 @@ public class FsVolumeImpl implements FsVolumeSpi {
      * And so on.
      */
     @Override
-    public ExtendedBlock nextBlock() throws IOException { // TODO: GABRIEL - find usage of old iterator call
+    public ExtendedBlock nextBlock() throws IOException { //
       if (state.atEnd) {
         return null;
       }
@@ -628,7 +628,7 @@ public class FsVolumeImpl implements FsVolumeSpi {
      // return new File(DatanodeUtil.idToBlockDir(getFinalizedDir(bpid),
      //     blk.getBlockId()).toString() + "/" + blk.getBlockName());
 
-      return new File(getFinalizedDir(bpid), blk.getBlockName()); // TODO: GABRIEL - test
+      return new File(getFinalizedDir(bpid), blk.getBlockName());
     }
 
     @Override
@@ -731,7 +731,7 @@ public class FsVolumeImpl implements FsVolumeSpi {
   @Override
   public LinkedList<ScanInfo> compileReport(String bpid,  LinkedList<ScanInfo> report, DirectoryScanner.ReportCompiler reportCompiler)
       throws InterruptedException, IOException {
-    return compileReport(this, getFinalizedDir(bpid), report); // TODO: GABRIEL - Test
+    return compileReport(this, getFinalizedDir(bpid), report);
   }
 
   /**
@@ -949,10 +949,9 @@ public class FsVolumeImpl implements FsVolumeSpi {
   /**
    * Compile list {@link ScanInfo} for the blocks in the directory <dir>
    */
-  // TODO: GABRIEL - should we use another block reporter?
   private LinkedList<ScanInfo> compileReport(FsVolumeSpi vol, File dir,
                                                               LinkedList<ScanInfo> report) {
-    LOG.info("Scanning local blocks"); // TODO: GABRIEL - should probably call old compileReport instead
+    LOG.info("Scanning local blocks");
     File[] files;
     try {
       files = FileUtil.listFiles(dir);

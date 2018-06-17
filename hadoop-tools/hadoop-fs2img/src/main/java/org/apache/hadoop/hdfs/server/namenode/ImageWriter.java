@@ -17,21 +17,28 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import com.google.protobuf.CodedOutputStream;
-import io.hops.common.Pair;
+import io.hops.metadata.HdfsStorageFactory;
+import io.hops.metadata.adaptor.BlockInfoDALAdaptor;
+import io.hops.metadata.adaptor.INodeDALAdaptor;
+import io.hops.metadata.hdfs.dal.BlockInfoDataAccess;
+import io.hops.metadata.hdfs.dal.INodeDataAccess;
+import io.hops.transaction.handler.HDFSOperationType;
+import io.hops.transaction.handler.LightWeightRequestHandler;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.apache.hadoop.hdfs.server.common.FileRegion;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 import org.apache.hadoop.util.ReflectionUtils;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -45,25 +52,19 @@ public class ImageWriter implements Closeable {
 
 //  private static final int ONDISK_VERSION = 1;
 //  private static final int LAYOUT_VERSION = -64; // see NameNodeLayoutVersion
-//
-//  public static final byte[] MAGIC_HEADER =
-//          "HDFSIMG1".getBytes(StandardCharsets.UTF_8); // from FSimageUtils
 
   private final int startBlock;
   private final int startInode;
   private final UGIResolver ugis;
-  private final BlockAliasMap.Writer<FileRegion> blocks;
+  private final BlockAliasMap.Writer<FileRegion> aliasMapWriter;
   private final BlockResolver blockIds;
 
   private boolean closed = false;
   private int curSec;
   private int curBlock;
   private final AtomicInteger curInode;
- // private final FileSummary.Builder summary = FileSummary.newBuilder()
- //   .setOndiskVersion(ONDISK_VERSION)
- //   .setLayoutVersion(LAYOUT_VERSION);
 
-  private final String blockPoolID  = "";
+  private final String blockPoolID;
 
   public static Options defaults() {
     return new Options();
@@ -71,10 +72,12 @@ public class ImageWriter implements Closeable {
 
   @SuppressWarnings("unchecked")
   public ImageWriter(Options opts) throws IOException {
+      // GABRIEL - Do we need to create NNStorage and set NameSpaceInfo?
     startBlock = opts.startBlock;
     curBlock = startBlock;
     startInode = opts.startInode;
     curInode = new AtomicInteger(startInode);
+    blockPoolID = opts.blockPoolID;
 
     ugis = null == opts.ugis
       ? ReflectionUtils.newInstance(opts.ugisClass, opts.getConf())
@@ -82,7 +85,7 @@ public class ImageWriter implements Closeable {
     BlockAliasMap<FileRegion> fmt = null == opts.blocks
         ? ReflectionUtils.newInstance(opts.aliasMap, opts.getConf())
       : opts.blocks;
-    blocks = fmt.getWriter(null, blockPoolID);
+    aliasMapWriter = fmt.getWriter(null, blockPoolID);
     blockIds = null == opts.blockIds
       ? ReflectionUtils.newInstance(opts.blockIdsClass, opts.getConf())
       : opts.blockIds;
@@ -94,10 +97,41 @@ public class ImageWriter implements Closeable {
     int id = curInode.getAndIncrement();
     e.accept(id);
     assert e.getId() < curInode.get();
-    INode n = e.toINode(ugis, blockIds, blocks);
-    n.setParentIdNoPersistance(e.getParentId());
+    INode n = e.toINode(ugis, blockIds, aliasMapWriter);
+
+    n.setParentIdNoPersistance(e.getParentId()); // GABRIEL - is parent id enough or do we need to set parent inode?
 
     return n;
+  }
+
+  void persistInodes(List<INode> inodes) throws IOException {
+    new LightWeightRequestHandler(HDFSOperationType.ADD_INODE) {
+      @Override
+      public Object performTask() throws IOException {
+        INodeDataAccess da = (INodeDataAccess) HdfsStorageFactory
+                .getDataAccess(INodeDataAccess.class);
+
+        INodeDALAdaptor adaptor = new INodeDALAdaptor(da);
+        adaptor.prepare(null, inodes, null); // converts hdfs -> dal and calls da.prepare
+
+        return null;
+      }
+    }.handle();
+  }
+
+  void persistBlocks(List<BlockInfo> blocks) throws IOException {
+    new LightWeightRequestHandler(HDFSOperationType.GET_ADDITIONAL_BLOCK) {
+      @Override
+      public Object performTask() throws IOException {
+        BlockInfoDataAccess da = (BlockInfoDataAccess) HdfsStorageFactory
+                .getDataAccess(BlockInfoDataAccess.class);
+
+        BlockInfoDALAdaptor adaptor = new BlockInfoDALAdaptor(da);
+        adaptor.prepare(null, blocks, null);
+
+        return null;
+      }
+    }.handle();
   }
 
   @Override
@@ -108,18 +142,15 @@ public class ImageWriter implements Closeable {
     closed = true;
   }
 
-
   @Override
   public synchronized String toString() {
     StringBuilder sb = new StringBuilder();
-  //  sb.append("{ codec=\"").append(compress.getImageCodec());
     sb.append("\", startBlock=").append(startBlock);
     sb.append(", curBlock=").append(curBlock);
     sb.append(", startInode=").append(startInode);
     sb.append(", curInode=").append(curInode);
     sb.append(", ugi=").append(ugis);
     sb.append(", blockIds=").append(blockIds);
-//    sb.append(", offset=").append(raw.pos); // GABRIEL - what is the purpose of raw?
     sb.append(" }");
     return sb.toString();
   }

@@ -339,7 +339,7 @@ public class BlockManager {
 
     blockTokenSecretManager = createBlockTokenSecretManager(conf);
 
-    providedStorageMap = new ProvidedStorageMap(this, conf); // TODO: GABRIEL - was called with namesystem as RwLock, investigate if needed
+    providedStorageMap = new ProvidedStorageMap(this, conf);
 
     this.maxCorruptFilesReturned =
         conf.getInt(DFSConfigKeys.DFS_DEFAULT_MAX_CORRUPT_FILES_RETURNED_KEY,

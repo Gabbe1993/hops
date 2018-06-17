@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockProto;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -80,7 +81,7 @@ public class TestFixedBlockResolver {
   @Test
   public void testEmpty() throws Exception {
     FileStatus f = file(0, 100);
-    Iterator<Block> b = blockId.resolve(f).iterator();
+    Iterator<BlockInfo> b = blockId.resolve(f).iterator();
     assertTrue(b.hasNext());
     assertEquals(0, b.next().getNumBytes());
     assertFalse(b.hasNext());

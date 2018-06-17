@@ -680,7 +680,7 @@ public class FileIoProvider {
     boolean succeeded = false;
     try {
       faultInjectorEventHook.beforeMetadataOp(volume, MKDIRS);
-      succeeded = dir.isDirectory() || dir.mkdirs(); // TODO: GABRIEL - mkdirs fails in TestWriteToReplica
+      succeeded = dir.isDirectory() || dir.mkdirs();
       profilingEventHook.afterMetadataOp(volume, MKDIRS, begin);
     } catch(Exception e) {
       onFailure(volume, begin);

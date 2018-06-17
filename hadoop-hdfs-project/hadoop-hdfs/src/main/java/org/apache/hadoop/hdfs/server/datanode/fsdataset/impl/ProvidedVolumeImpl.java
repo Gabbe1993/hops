@@ -523,7 +523,7 @@ class ProvidedVolumeImpl extends FsVolumeImpl {
   private ProvidedBlockPoolSlice getProvidedBlockPoolSlice(String bpid)
       throws IOException {
     ProvidedBlockPoolSlice bp = bpSlices.get(bpid);
-    if (bp == null) { // TODO: GABRIEL - should be null for testProvidedVolumeImpl
+    if (bp == null) { // GABRIEL - should be null for testProvidedVolumeImpl
       throw new IOException("block pool " + bpid + " is not found");
     }
     return bp;

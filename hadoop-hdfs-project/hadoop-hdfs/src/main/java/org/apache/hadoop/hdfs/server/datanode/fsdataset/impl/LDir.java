@@ -79,7 +79,7 @@ class LDir {
       throws IOException {
 
      if (numBlocks < maxBlocksPerDir) {
-      final File dest = FsDatasetImpl.moveBlockFiles(b, (ReplicaInfo) b, dir); // TODO: GABRIEL - test with (ReplicaInfo) b
+      final File dest = FsDatasetImpl.moveBlockFiles(b, (ReplicaInfo) b, dir);
       numBlocks += 1;
       return dest;
     }

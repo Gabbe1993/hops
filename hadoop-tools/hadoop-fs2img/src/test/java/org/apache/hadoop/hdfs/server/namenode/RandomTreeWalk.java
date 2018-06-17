@@ -38,26 +38,26 @@ public class RandomTreeWalk extends TreeWalk {
   private final long seed;
   private final float depth;
   private final int children;
-  private final Map<Long, Long> mSeed;
+  private final Map<Integer, Integer> mSeed;
 
-  RandomTreeWalk(long seed) {
+  RandomTreeWalk(int seed) {
     this(seed, 10);
   }
 
-  RandomTreeWalk(long seed, int children) {
+  RandomTreeWalk(int seed, int children) {
     this(seed, children, 0.15f);
   }
 
-  RandomTreeWalk(long seed, int children, float depth) {
+  RandomTreeWalk(int seed, int children, float depth) {
     this(randomRoot(seed), seed, children, depth);
   }
 
-  RandomTreeWalk(Path root, long seed, int children, float depth) {
+  RandomTreeWalk(Path root, int seed, int children, float depth) {
     this.seed = seed;
     this.depth = depth;
     this.children = children;
-    mSeed = Collections.synchronizedMap(new HashMap<Long, Long>());
-    mSeed.put(-1L, seed);
+    mSeed = Collections.synchronizedMap(new HashMap<Integer, Integer>());
+    mSeed.put(-1, seed);
     this.root = root;
   }
 
@@ -78,14 +78,14 @@ public class RandomTreeWalk extends TreeWalk {
   }
 
   @Override
-  protected Iterable<TreePath> getChildren(TreePath p, long id,
+  protected Iterable<TreePath> getChildren(TreePath p, int id,
                                            TreeIterator walk) {
     final FileStatus pFs = p.getFileStatus();
     if (pFs.isFile()) {
       return Collections.emptyList();
     }
     // seed is f(parent seed, attrib)
-    long cseed = mSeed.get(p.getParentId()) * p.getFileStatus().hashCode();
+    int cseed = mSeed.get(p.getParentId()) * p.getFileStatus().hashCode();
     mSeed.put(p.getId(), cseed);
     Random r = new Random(cseed);
 

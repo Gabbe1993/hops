@@ -69,7 +69,6 @@ public class INodeFile extends INode implements BlockCollection {
   private boolean isFileStoredInDB = false;
   
 
-  // GABRIEL - use this constructor and pass null as blklist
   public INodeFile(PermissionStatus permissions, BlockInfo[] blklist,
       short replication, long modificationTime, long atime,
       long preferredBlockSize, byte storagePolicyID) throws IOException {

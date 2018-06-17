@@ -49,7 +49,7 @@ public class TestRandomTreeWalk {
   @Test
   public void testRandomTreeWalkRepeat() throws Exception {
     Set<TreePath> ns = new HashSet<>();
-    final long seed = r.nextLong();
+    final int seed = r.nextInt();
     RandomTreeWalk t1 = new RandomTreeWalk(seed, 10, .1f);
     int i = 0;
     for (TreePath p : t1) {
@@ -70,7 +70,7 @@ public class TestRandomTreeWalk {
   public void testRandomTreeWalkFork() throws Exception {
     Set<FileStatus> ns = new HashSet<>();
 
-    final long seed = r.nextLong();
+    final int seed = r.nextInt();
     RandomTreeWalk t1 = new RandomTreeWalk(seed, 10, .15f);
     int i = 0;
     for (TreePath p : t1) {
@@ -100,7 +100,7 @@ public class TestRandomTreeWalk {
   @Test
   public void testRandomRootWalk() throws Exception {
     Set<FileStatus> ns = new HashSet<>();
-    final long seed = r.nextLong();
+    final int seed = r.nextInt();
     Path root = new Path("foo://bar:4344/dingos");
     String sroot = root.toString();
     int nroot = sroot.length();
