@@ -28,17 +28,18 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.apache.hadoop.hdfs.server.common.FileRegion;
+import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
+import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.mortbay.log.Log;
 
 import java.io.*;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -64,20 +65,19 @@ public class ImageWriter implements Closeable {
   private int curBlock;
   private final AtomicInteger curInode;
 
-  private final String blockPoolID;
-
   public static Options defaults() {
     return new Options();
   }
 
   @SuppressWarnings("unchecked")
   public ImageWriter(Options opts) throws IOException {
-      // GABRIEL - Do we need to create NNStorage and set NameSpaceInfo?
+    // GABRIEL - Do we need to create NNStorage and set NameSpaceInfo?
+    String blockPoolID = opts.blockPoolID;
+
     startBlock = opts.startBlock;
     curBlock = startBlock;
     startInode = opts.startInode;
     curInode = new AtomicInteger(startInode);
-    blockPoolID = opts.blockPoolID;
 
     ugis = null == opts.ugis
       ? ReflectionUtils.newInstance(opts.ugisClass, opts.getConf())
@@ -111,27 +111,27 @@ public class ImageWriter implements Closeable {
         INodeDataAccess da = (INodeDataAccess) HdfsStorageFactory
                 .getDataAccess(INodeDataAccess.class);
 
-        INodeDALAdaptor adaptor = new INodeDALAdaptor(da);
-        adaptor.prepare(null, inodes, null); // converts hdfs -> dal and calls da.prepare
+        da.prepare(null, inodes, null);
 
         return null;
       }
     }.handle();
+    Log.info("Persisted inodes");
   }
 
   void persistBlocks(List<BlockInfo> blocks) throws IOException {
-    new LightWeightRequestHandler(HDFSOperationType.GET_ADDITIONAL_BLOCK) {
+    new LightWeightRequestHandler(HDFSOperationType.ADD_SAFE_BLOCKS) {
       @Override
       public Object performTask() throws IOException {
         BlockInfoDataAccess da = (BlockInfoDataAccess) HdfsStorageFactory
                 .getDataAccess(BlockInfoDataAccess.class);
 
-        BlockInfoDALAdaptor adaptor = new BlockInfoDALAdaptor(da);
-        adaptor.prepare(null, blocks, null);
+        da.prepare(null, blocks, null); // throws java.lang.ClassCastException: io.hops.metadata.hdfs.entity.BlockInfo cannot be cast to org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo
 
         return null;
       }
     }.handle();
+    Log.info("Persisted blocks");
   }
 
   @Override
@@ -203,8 +203,6 @@ public class ImageWriter implements Closeable {
           NullBlockAliasMap.class, BlockAliasMap.class);
       blockIdsClass = conf.getClass(BLOCK_RESOLVER_CLASS,
           FixedBlockResolver.class, BlockResolver.class);
-      clusterID = "";
-      blockPoolID = "";
     }
 
     @Override

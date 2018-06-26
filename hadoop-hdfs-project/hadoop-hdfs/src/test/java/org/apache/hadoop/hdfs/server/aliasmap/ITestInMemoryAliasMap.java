@@ -37,7 +37,7 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * ITestInMemoryAliasMap is an integration test that writes and reads to
+ * ITestInMemoryAliaEnding block pool service forsMap is an integration test that writes and reads to
  * an AliasMap. This is an integration test because it can't be run in parallel
  * like normal unit tests since there is conflict over the port being in use.
  */

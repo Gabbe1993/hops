@@ -30,6 +30,7 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.aliasmap.InMemoryAliasMap;
 import org.apache.hadoop.hdfs.server.aliasmap.InMemoryLevelDBAliasMapServer;
 import org.apache.hadoop.hdfs.server.blockmanagement.*;
+import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.InMemoryLevelDBAliasMapClient;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap;
@@ -82,16 +83,25 @@ public class ITestProvidedImplementation {
   private final String fileSuffix = ".dat";
   private final int baseFileLen = 1024;
   private long providedDataSize = 0;
-  private final String bpid = "BP-1668890629-127.0.1.1-1529159173149"; // GABRIEL - Needs to match blockmanager, in Hops all have the same
+  private String bpid = "BP-1436420463-127.0.1.1-1530017794287"; // TODO: GABRIEL - This NEEDS to match bpid from Hops. Should be retrived from db. Now has to be changed with each new bpid!
 
   private Configuration conf;
   private MiniDFSCluster cluster;
+  private ArrayList<INode> inodes;
+  private ArrayList<BlockInfo> blocks;
 
   @Before
   public void setSeed() throws Exception {
     if (fBASE.exists() && !FileUtil.fullyDelete(fBASE)) {
       throw new IOException("Could not fully delete " + fBASE);
     }
+//    try {
+//      bpid = StorageInfo.getStorageInfoFromDB().getBlockPoolId(); // TODO throws exception
+//      LOG.info("Block pool id from db = " + bpid);
+//    } catch (IOException e) {
+//      LOG.error("Failed to load block pool id from db = " + bpid);
+//    }
+
     long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println(name.getMethodName() + " seed: " + seed);
@@ -145,6 +155,7 @@ public class ITestProvidedImplementation {
         }
       }
     }
+
   }
 
   @After
@@ -158,14 +169,14 @@ public class ITestProvidedImplementation {
     }
   }
 
-  void createImage(TreeWalk t, Path out,
-                   Class<? extends BlockResolver> blockIdsClass) throws Exception {
-    createImage(t, out, blockIdsClass, "", TextFileRegionAliasMap.class);
+  ImageWriter createImage(TreeWalk t, Path out,
+                          Class<? extends BlockResolver> blockIdsClass) throws Exception {
+    return createImage(t, out, blockIdsClass, "", TextFileRegionAliasMap.class);
   }
 
-  void createImage(TreeWalk t, Path out,
-                   Class<? extends BlockResolver> blockIdsClass, String clusterID,
-                   Class<? extends BlockAliasMap> aliasMapClass) throws Exception {
+  ImageWriter createImage(TreeWalk t, Path out,
+                          Class<? extends BlockResolver> blockIdsClass, String clusterID,
+                          Class<? extends BlockAliasMap> aliasMapClass) throws Exception {
     ImageWriter.Options opts = ImageWriter.defaults();
     opts.setConf(conf);
     opts.output(out.toString())
@@ -174,8 +185,8 @@ public class ITestProvidedImplementation {
         .clusterID(clusterID)
         .blockPoolID(bpid);
 
-    List<INode> inodes = new ArrayList<>();
-    List<BlockInfo> blocks = new ArrayList<>();
+    inodes = new ArrayList<>();
+    blocks = new ArrayList<>();
 
     try (ImageWriter w = new ImageWriter(opts)) {
       for (TreePath e : t) {
@@ -184,26 +195,26 @@ public class ITestProvidedImplementation {
         if(inode instanceof INodeFile)
           blocks.addAll(e.getBlockInfos());
       }
- //     w.persistBlocks(blocks);
- //     w.persistInodes(inodes);
+      LOG.info("found "+inodes.size()+" inodes and " + blocks.size() + " blocks from fs2img");
 
+      return w;
     } catch (IOException e) {
       e.printStackTrace();
+      throw e;
     }
-
   }
   void startCluster(Path nspath, int numDatanodes,
                     StorageType[] storageTypes,
                     StorageType[][] storageTypesPerDatanode,
-                    boolean doFormat) throws IOException {
+                    boolean doFormat, ImageWriter writer) throws IOException {
     startCluster(nspath, numDatanodes, storageTypes, storageTypesPerDatanode,
-        doFormat, null);
+        doFormat, null, writer);
   }
 
   void startCluster(Path nspath, int numDatanodes,
                     StorageType[] storageTypes,
                     StorageType[][] storageTypesPerDatanode,
-                    boolean doFormat, String[] racks) throws IOException {
+                    boolean doFormat, String[] racks, ImageWriter writer) throws IOException {
     conf.set(DFS_NAMENODE_NAME_DIR_KEY, nspath.toString());
 
     if (storageTypesPerDatanode != null) {
@@ -231,17 +242,27 @@ public class ITestProvidedImplementation {
           .racks(racks)
           .build();
     }
-    cluster.waitActive();
+    // TODO:  GABRIEL - always times out for cluster waiting
+
+    if(writer != null) {
+      writer.persistBlocks(blocks); // make sure to start cluster before persisting
+      writer.persistInodes(inodes);
+    } else {
+      LOG.warn("TextWriter is null, will not persist to db");
+    }
+
+   // cluster.waitActive();
   }
 
   @Test(timeout=20000)
   public void testLoadImage() throws Exception {
     final int seed = r.nextInt();
     LOG.info("providedPath: " + providedPath);
-    createImage(new RandomTreeWalk(seed), nnDirPath, FixedBlockResolver.class);
+
+    ImageWriter writer = createImage(new RandomTreeWalk(seed), nnDirPath, FixedBlockResolver.class);
     startCluster(nnDirPath, 0,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK}, null,
-        false);
+        false, writer);
 
     FileSystem fs = cluster.getFileSystem();
     for (TreePath e : new RandomTreeWalk(seed)) {
@@ -264,12 +285,12 @@ public class ITestProvidedImplementation {
   public void testProvidedReporting() throws Exception {
     conf.setClass(ImageWriter.Options.UGI_CLASS,
         SingleUGIResolver.class, UGIResolver.class);
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     int numDatanodes = 10;
     startCluster(nnDirPath, numDatanodes,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK}, null,
-        false);
+        false, writer);
     long diskCapacity = 1000;
     // set the DISK capacity for testing
     for (DataNode dn: cluster.getDataNodes()) {
@@ -345,7 +366,7 @@ public class ITestProvidedImplementation {
   public void testDefaultReplication() throws Exception {
     int targetReplication = 2;
     conf.setInt(FixedBlockMultiReplicaResolver.REPLICATION, targetReplication);
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockMultiReplicaResolver.class);
     // make the last Datanode with only DISK
     startCluster(nnDirPath, 3, null,
@@ -353,7 +374,7 @@ public class ITestProvidedImplementation {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false);
+        false, writer);
     // wait for the replication to finish
     Thread.sleep(50000);
 
@@ -460,7 +481,7 @@ public class ITestProvidedImplementation {
         new StorageType[][] {
             {StorageType.DISK},
             {StorageType.DISK}},
-        true);
+        true, null);
     assertTrue(cluster.isClusterUp());
     assertTrue(cluster.isDataNodeUp());
 
@@ -503,14 +524,14 @@ public class ITestProvidedImplementation {
    */
   @Test(timeout=50000)
   public void testSetReplicationForProvidedFiles() throws Exception {
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     // 10 Datanodes with both DISK and PROVIDED storage
     startCluster(nnDirPath, 10,
         new StorageType[]{
             StorageType.PROVIDED, StorageType.DISK},
         null,
-        false);
+        false, writer);
     setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
   }
 
@@ -545,14 +566,14 @@ public class ITestProvidedImplementation {
 
   @Test(timeout=30000)
   public void testProvidedDatanodeFailures() throws Exception {
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
             FixedBlockResolver.class);
     startCluster(nnDirPath, 3, null,
         new StorageType[][] {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false);
+        false, writer);
 
     DataNode providedDatanode1 = cluster.getDataNodes().get(0);
     DataNode providedDatanode2 = cluster.getDataNodes().get(1);
@@ -616,7 +637,7 @@ public class ITestProvidedImplementation {
 
   @Test(timeout=300000)
   public void testTransientDeadDatanodes() throws Exception {
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
             FixedBlockResolver.class);
     // 3 Datanodes, 2 PROVIDED and other DISK
     startCluster(nnDirPath, 3, null,
@@ -624,7 +645,7 @@ public class ITestProvidedImplementation {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false);
+        false, writer);
 
     DataNode providedDatanode = cluster.getDataNodes().get(0);
     DatanodeStorageInfo providedDNInfo = getProvidedDatanodeStorageInfo();
@@ -654,7 +675,7 @@ public class ITestProvidedImplementation {
 
   @Test(timeout=30000)
   public void testNamenodeRestart() throws Exception {
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     // 3 Datanodes, 2 PROVIDED and other DISK
     startCluster(nnDirPath, 3, null,
@@ -662,7 +683,7 @@ public class ITestProvidedImplementation {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false);
+        false, writer);
 
     verifyFileLocation(numFiles - 1, 2);
     cluster.restartNameNodes();
@@ -696,14 +717,14 @@ public class ITestProvidedImplementation {
   @Test(timeout=30000)
   public void testSetClusterID() throws Exception {
     String clusterID = "PROVIDED-CLUSTER";
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class, clusterID, TextFileRegionAliasMap.class);
     // 2 Datanodes, 1 PROVIDED and other DISK
     startCluster(nnDirPath, 2, null,
         new StorageType[][] {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false);
+        false, writer);
     NameNode nn = cluster.getNameNode();
     assertEquals(clusterID, nn.getNamesystem().getClusterId());
   }
@@ -712,14 +733,14 @@ public class ITestProvidedImplementation {
   public void testNumberOfProvidedLocations() throws Exception {
     // set default replication to 4
     conf.setInt(DFSConfigKeys.DFS_REPLICATION_KEY, 4);
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     // start with 4 PROVIDED location
     startCluster(nnDirPath, 4,
         new StorageType[]{
             StorageType.PROVIDED, StorageType.DISK},
         null,
-        false);
+        false, writer);
     int expectedLocations = 4;
     for (int i = 0; i < numFiles; i++) {
       verifyFileLocation(i, expectedLocations);
@@ -746,17 +767,18 @@ public class ITestProvidedImplementation {
     // set default replication to 4
     conf.setInt(DFSConfigKeys.DFS_REPLICATION_KEY, 4);
 
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
-        FixedBlockResolver.class);
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+            FixedBlockResolver.class);
     // start with 4 PROVIDED location
     startCluster(nnDirPath, 4,
         new StorageType[]{
             StorageType.PROVIDED, StorageType.DISK},
         null,
-        false);
+        false, writer);
+
     int expectedLocations = 4;
     for (int i = 0; i < numFiles; i++) {
-      verifyFileLocation(i, expectedLocations);
+      verifyFileLocation(i, expectedLocations); // GABRIEL - need to persist blocks before calling this (checks in ndb)
     }
   }
 
@@ -792,7 +814,7 @@ public class ITestProvidedImplementation {
     // each with 1 PROVIDED volume and other DISK volume
     startCluster(nnDirPath, 2,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK},
-        null, false);
+        null, false, null);
     verifyFileSystemContents();
     FileUtils.deleteDirectory(tempDirectory);
   }
@@ -826,11 +848,11 @@ public class ITestProvidedImplementation {
 
   @Test
   public void testDatanodeLifeCycle() throws Exception {
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     startCluster(nnDirPath, 3,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK},
-        null, false);
+        null, false, writer);
 
     int fileIndex = numFiles - 1;
 
@@ -892,7 +914,7 @@ public class ITestProvidedImplementation {
         "BlockPlacementPolicyRackFaultTolerant",
         "BlockPlacementPolicyWithNodeGroup",
         "BlockPlacementPolicyWithUpgradeDomain"};
-    createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     String[] racks =
         {"/pod0/rack0", "/pod0/rack0", "/pod0/rack1", "/pod0/rack1",
@@ -902,7 +924,7 @@ public class ITestProvidedImplementation {
       conf.set(DFS_BLOCK_REPLICATOR_CLASSNAME_KEY, packageName + "." + policy);
       startCluster(nnDirPath, racks.length,
           new StorageType[]{StorageType.PROVIDED, StorageType.DISK},
-          null, false, racks);
+          null, false, racks, writer);
       verifyFileSystemContents();
       setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
       cluster.shutdown();

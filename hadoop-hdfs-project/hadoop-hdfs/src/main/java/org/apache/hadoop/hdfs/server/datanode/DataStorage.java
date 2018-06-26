@@ -97,6 +97,7 @@ public class DataStorage extends Storage {
     return datanodeUuid;
   }
 
+
   public synchronized void setDatanodeUuid(String newDatanodeUuid) {
     this.datanodeUuid = newDatanodeUuid;
   }
@@ -775,7 +776,7 @@ public class DataStorage extends Storage {
     // then finalize it. Else finalize the corresponding BP.
     for (StorageDirectory sd : storageDirs) {
       File prevDir = sd.getPreviousDir();
-      if (prevDir.exists()) {
+      if (prevDir != null && prevDir.exists()) {
         // data node level storage finalize
         doFinalize(sd);
       } else {

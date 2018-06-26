@@ -11,6 +11,7 @@ import org.apache.hadoop.hdfs.protocol.ProvidedStorageLocation;
 import org.apache.hadoop.io.MultipleIOException;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
+import org.mortbay.log.Log;
 
 import java.io.*;
 import java.util.*;
@@ -290,7 +291,9 @@ public class TextFileRegionFormat
       }
       String[] f = line.split(delim);
       if (f.length != 4) {
-        throw new IOException("Invalid line: " + line);
+        throw new IOException("Invalid line: " + line); // TODO: GABRIEL - last line is incomplete. Missing block?
+        // Log.warn("Invalid line: " + line);
+        // return new FileRegion(0, new Path("/"), 0 ,0);
       }
       return new FileRegion(Long.valueOf(f[0]), new Path(f[1]),
           Long.valueOf(f[2]), Long.valueOf(f[3]));
@@ -367,6 +370,9 @@ public class TextFileRegionFormat
     public void store(FileRegion token) throws IOException {
       ProvidedStorageLocation location = token.getProvidedStorageLocation();
 
+      if(!location.getPath().getName().endsWith(".dat")) {
+        return; // GABRIEL - only store .dat files for now
+      }
       out.append(String.valueOf(token.getBlock().getBlockId())).append(delim);
       out.append(location.getPath().toString()).append(delim);
       out.append(Long.toString(location.getOffset())).append(delim);

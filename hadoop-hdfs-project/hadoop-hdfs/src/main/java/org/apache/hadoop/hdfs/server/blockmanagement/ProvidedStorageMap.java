@@ -140,17 +140,18 @@ public class ProvidedStorageMap {
 
   private void processProvidedStorageReport()
       throws IOException {
-    assert lock.hasWriteLock() : "Not holding write lock";
+  //  assert lock.hasWriteLock() : "Not holding write lock";
     if (providedStorageInfo.getBlockReportCount() == 0
         || providedDescriptor.activeProvidedDatanodes() == 0) {
-      LOG.info("Calling process first blk report from storage: "
+      LOG.info("Calling process first blk report from PROVIDED storage: "
           + providedStorageInfo);
       // first pass; periodic refresh should call bm.processReport
       BlockAliasMap.Reader<BlockAlias> reader =
           aliasMap.getReader(null, bm.getBlockPoolId());
       if (reader != null) {
         bm.processReport(providedStorageInfo,
-                BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT).addAllAsFinalized(reader.iterator()).build()); // TODO: GABRIEL - test. Using hops block report code
+                BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)
+                        .addAllAsFinalized(reader.iterator()).build()); // TODO: GABRIEL - test. Using hops block report code
       }
     }
   }

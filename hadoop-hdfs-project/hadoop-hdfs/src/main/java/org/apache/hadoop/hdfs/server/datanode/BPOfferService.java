@@ -751,6 +751,7 @@ class BPOfferService implements Runnable {
       if (cmd != null) {
         blkReportHander.processCommand(new DatanodeCommand[]{cmd});
       }
+
       // Now safe to start scanning the block pool.
       // If it has already been started, this is a no-op.
       if (dn.blockScanner != null) {
@@ -934,7 +935,7 @@ public class IncrementalBRTask implements Callable{
       }
 
       // Get a namenode to send the report(s) to
-      ActiveNode an = nextNNForBlkReport(totalBlockCount);
+      ActiveNode an = nextNNForBlkReport(totalBlockCount); // TODO: GABRIEL - always null in provided test
       if (an != null) {
         blkReportHander = getAnActor(an.getRpcServerAddressForDatanodes());
         if (blkReportHander == null || !blkReportHander.isInitialized()) {

@@ -1000,7 +1000,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     if (replicas != null) {
       for (ReplicaInfo b : replicas) {
         if (b.getState() == ReplicaState.FINALIZED) {
-          finalized.add(new FinalizedReplica((FinalizedReplica)b));
+          finalized.add(b);
         }
       }
     }
@@ -1871,13 +1871,17 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       String dir = null;
       final List<FsVolumeImpl> volumes = getVolumes();
       for (FsVolumeImpl vol : volumes) {
+        if(vol.getCurrentDir() == null) { // GABRIEL - provided vol's dir is always null
+          LOG.error("Current dir " + vol + " is null. Skipping it");
+          break;
+        }
         String bpDir = vol.getCurrentDir().getPath() + "/" + bpid;
         if (RollingLogsImpl.isFilePresent(bpDir, prefix)) {
           dir = bpDir;
           break;
         }
       }
-      if (dir == null) {
+      if (dir == null && volumes.get(0).getCurrentDir() != null) {
         dir = volumes.get(0).getCurrentDir().getPath() + "/" + bpid;
       }
       return new RollingLogsImpl(dir, prefix);

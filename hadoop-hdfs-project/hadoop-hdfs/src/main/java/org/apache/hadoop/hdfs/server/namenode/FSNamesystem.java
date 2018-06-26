@@ -522,7 +522,9 @@ public class FSNamesystem
       this.isPermissionEnabled = conf.getBoolean(DFS_PERMISSIONS_ENABLED_KEY,
           DFS_PERMISSIONS_ENABLED_DEFAULT);
 
-      blockPoolId = StorageInfo.getStorageInfoFromDB().getBlockPoolId();
+      blockPoolId = StorageInfo.getStorageInfoFromDB().getBlockPoolId(); // GABRIEL - needs to match bpid for provided volumes
+      LOG.info("blockPoolId from DB = " + blockPoolId);
+
       blockManager.setBlockPoolId(blockPoolId);
       hopSpecificInitialization(conf);
       this.quotaUpdateManager = new QuotaUpdateManager(this, conf);

@@ -28,7 +28,7 @@ import java.util.Set;
  * Namesystem operations.
  */
 @InterfaceAudience.Private
-public interface Namesystem extends SafeMode { // TODO: GABRIEL -  do we need RwLock?
+public interface Namesystem extends SafeMode {
   /**
    * Is this name system running?
    */

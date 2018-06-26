@@ -355,7 +355,8 @@ public class TextFileRegionAliasMap
       }
       String[] f = line.split(delim);
       if (f.length != 5 && f.length != 6) {
-        throw new IOException("Invalid line: " + line);
+        LOG.error("Invalid line: " + line);
+        return null;
       }
       byte[] nonce = new byte[0];
       if (f.length == 6) {
@@ -444,6 +445,10 @@ public class TextFileRegionAliasMap
       final Block block = token.getBlock();
       final ProvidedStorageLocation psl = token.getProvidedStorageLocation();
 
+     // LOG.info(psl.getPath().getName());
+      if(!psl.getPath().getName().endsWith(".dat")) {
+        return; // TODO: GABRIEL - does not seem to be called, but last line in .csv does not contain ".dat"
+      }
       out.append(String.valueOf(block.getBlockId())).append(delim);
       out.append(psl.getPath().toString()).append(delim);
       out.append(Long.toString(psl.getOffset())).append(delim);
