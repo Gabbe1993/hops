@@ -2092,9 +2092,10 @@ public class BlockManager {
     }
 
     ReportStatistics reportStatistics = new ReportStatistics();
+
     if(!storageInfo.getStorageType().equals(StorageType.PROVIDED)) {
       // Get the storageinfo object that we are updating in this processreport
-      reportStatistics = processReport(storageInfo, newReport);
+      reportStatistics = processReport(storageInfo, newReport); // GABRIEL - should we skip if provided?
     } else {
       LOG.info("Skipping block reporting for PROVIDED volume");
     }
@@ -2208,7 +2209,8 @@ public class BlockManager {
     Collection<StatefulBlockInfo> toUC = Collections.newSetFromMap(mapToUC);
 
     final boolean firstBlockReport =
-        namesystem.isInStartupSafeMode() && storage.getBlockReportCount() == 0;
+            (namesystem.isInStartupSafeMode() && storage.getBlockReportCount() == 0)
+            || storage.getStorageType().equals(StorageType.PROVIDED);
     ReportStatistics reportStatistics = reportDiff(storage, report, toAdd, toRemove, toInvalidate, toCorrupt,
         toUC, firstBlockReport);
 
@@ -2225,7 +2227,7 @@ public class BlockManager {
     final List<Callable<Object>> addTasks = new ArrayList<>();
     for (final BlockInfo b : toAdd) {
       if (firstBlockReport) {
-        addStoredBlockImmediateTx(b, storage);
+        addStoredBlockImmediateTx(b, storage);  // TODO: GABRIEL: exception for provided storage reports?
       } else {
         addTasks.add(new Callable<Object>() {
           @Override
@@ -2252,8 +2254,6 @@ public class BlockManager {
     for (BlockToMarkCorrupt b : toCorrupt) {
       markBlockAsCorruptTx(b, storage);
     }
-
-
 
     for (Block b : toInvalidate) {
       blockLog.info("BLOCK* processReport: " + b + " on " + storage + " " +

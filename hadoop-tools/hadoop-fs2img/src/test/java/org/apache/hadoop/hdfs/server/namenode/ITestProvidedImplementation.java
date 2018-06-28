@@ -83,7 +83,7 @@ public class ITestProvidedImplementation {
   private final String fileSuffix = ".dat";
   private final int baseFileLen = 1024;
   private long providedDataSize = 0;
-  private String bpid = "BP-1436420463-127.0.1.1-1530017794287"; // TODO: GABRIEL - This NEEDS to match bpid from Hops. Should be retrived from db. Now has to be changed with each new bpid!
+  private String bpid = "BP-377981532-127.0.1.1-1530186677514"; // TODO: GABRIEL - This NEEDS to match bpid from Hops. Should be retrived from db. Now has to be changed with each new bpid!
 
   private Configuration conf;
   private MiniDFSCluster cluster;
@@ -233,7 +233,7 @@ public class ITestProvidedImplementation {
           .storagesPerDatanode(storageTypes.length)
           .storageTypes(storageTypes)
           .racks(racks)
-          .build();
+          .build(); // TODO:  GABRIEL - times out for cluster waiting
     } else {
       cluster = new MiniDFSCluster.Builder(conf)
           .format(doFormat)
@@ -242,7 +242,7 @@ public class ITestProvidedImplementation {
           .racks(racks)
           .build();
     }
-    // TODO:  GABRIEL - always times out for cluster waiting
+    cluster.waitActive();
 
     if(writer != null) {
       writer.persistBlocks(blocks); // make sure to start cluster before persisting

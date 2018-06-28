@@ -854,7 +854,7 @@ public class MiniDFSCluster {
         } catch (InterruptedException e) {
         }
         if (++i >
-            15) { //HOP increase the time from 10 to 15 becase now the registration process some
+            30) { //HOP increase the time from 10 to 15 becase now the registration process some
           //times takes longer. it is because the threads for sending HB and Block Report
           //are separate and some times we take couple of second more
           throw new IOException(
@@ -1672,6 +1672,10 @@ public class MiniDFSCluster {
    */
   public boolean isNameNodeUp(int nnIndex) throws IOException {
     NameNode nameNode = nameNodes[nnIndex].nameNode;
+    LOG.info("nameNode = " + nameNode.getNameNodeAddressHostPortString()
+            + " in safemode = " + nameNode.isInSafeMode()
+            + " is leader = " + nameNode.isLeader());
+
     if (nameNode == null) {
       return false;
     }
@@ -1815,6 +1819,7 @@ public class MiniDFSCluster {
       } catch (InterruptedException e) {
       }
     }
+    LOG.info("Cluster is active");
 
     client.close();
   }

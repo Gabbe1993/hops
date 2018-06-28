@@ -117,4 +117,5 @@ public class TestProvidedStorageMap {
     assertTrue("The DatanodeDescriptor should contain the provided storage",
         dn2.getStorageInfo(providedStorageID) == providedMapStorage);
   }
+
 }

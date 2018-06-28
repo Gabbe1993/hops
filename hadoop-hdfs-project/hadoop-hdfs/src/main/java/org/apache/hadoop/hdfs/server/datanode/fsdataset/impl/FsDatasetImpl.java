@@ -1871,18 +1871,19 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       String dir = null;
       final List<FsVolumeImpl> volumes = getVolumes();
       for (FsVolumeImpl vol : volumes) {
-        if(vol.getCurrentDir() == null) { // GABRIEL - provided vol's dir is always null
-          LOG.error("Current dir " + vol + " is null. Skipping it");
-          break;
-        }
-        String bpDir = vol.getCurrentDir().getPath() + "/" + bpid;
+        String bpDir = vol.getCurrentDir() == null
+                ? vol.getBaseURI().getPath() + "/" + bpid
+                : vol.getCurrentDir().getPath() + "/" + bpid;
+
         if (RollingLogsImpl.isFilePresent(bpDir, prefix)) {
           dir = bpDir;
           break;
         }
       }
-      if (dir == null && volumes.get(0).getCurrentDir() != null) {
-        dir = volumes.get(0).getCurrentDir().getPath() + "/" + bpid;
+      if (dir == null) {
+        dir = volumes.get(0).getCurrentDir() == null
+                ? volumes.get(0).getBaseURI().getPath() + "/" + bpid
+                : volumes.get(0).getCurrentDir().getPath() + "/" + bpid;
       }
       return new RollingLogsImpl(dir, prefix);
     }

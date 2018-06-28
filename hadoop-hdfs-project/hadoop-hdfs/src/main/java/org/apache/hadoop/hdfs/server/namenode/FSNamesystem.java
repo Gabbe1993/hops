@@ -5804,7 +5804,7 @@ public class FSNamesystem
     if (!this.isInSafeMode()) {
       return "";
     }
-    return "Safe mode is ON." + this.getSafeModeTip();
+    return "Safe mode is ON." + this.getSafeModeTip(); // TODO: GABRIEL - never exits safe mode (not enough blocks reported)
   }
 
   @Override // NameNodeMXBean

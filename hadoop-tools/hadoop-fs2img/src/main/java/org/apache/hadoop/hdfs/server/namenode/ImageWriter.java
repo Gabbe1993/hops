@@ -105,6 +105,7 @@ public class ImageWriter implements Closeable {
   }
 
   void persistInodes(List<INode> inodes) throws IOException {
+    Log.info("About to persist " + inodes.size() + " inodes...");
     new LightWeightRequestHandler(HDFSOperationType.ADD_INODE) {
       @Override
       public Object performTask() throws IOException {
@@ -120,6 +121,7 @@ public class ImageWriter implements Closeable {
   }
 
   void persistBlocks(List<BlockInfo> blocks) throws IOException {
+    Log.info("About to persist " + blocks.size() + " blocks...");
     new LightWeightRequestHandler(HDFSOperationType.ADD_SAFE_BLOCKS) {
       @Override
       public Object performTask() throws IOException {

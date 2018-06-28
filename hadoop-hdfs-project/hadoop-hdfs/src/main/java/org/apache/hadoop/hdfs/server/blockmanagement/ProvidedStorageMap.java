@@ -149,6 +149,7 @@ public class ProvidedStorageMap {
       BlockAliasMap.Reader<BlockAlias> reader =
           aliasMap.getReader(null, bm.getBlockPoolId());
       if (reader != null) {
+        // TODO: GABRIEL - should use first process code
         bm.processReport(providedStorageInfo,
                 BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)
                         .addAllAsFinalized(reader.iterator()).build()); // TODO: GABRIEL - test. Using hops block report code
@@ -340,13 +341,14 @@ public class ProvidedStorageMap {
       storage.setHeartbeatedSinceFailover(true);
       storageMap.put(storage.getStorageID(), storage);
 
-    /*
+
+/*
     try {
-        globalStorageMap.updateStorage(storage); // GABRIEL - not added to ndb
+        globalStorageMap.updateStorage(storage); // TODO: GABRIEL - update global storage map?
       } catch (IOException e) {
         e.printStackTrace();
       }
-    */
+*/
       return storage;
     }
 
