@@ -54,6 +54,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
+import sun.rmi.runtime.Log;
 
 /**
  * This class is used for block maps stored as text files,
@@ -440,15 +441,13 @@ public class TextFileRegionAliasMap
       this.delim = delim;
     }
 
+    int stored = 1;
+
     @Override
     public void store(FileRegion token) throws IOException {
       final Block block = token.getBlock();
       final ProvidedStorageLocation psl = token.getProvidedStorageLocation();
 
-     // LOG.info(psl.getPath().getName());
-      if(!psl.getPath().getName().endsWith(".dat")) {
-        return; // TODO: GABRIEL - does not seem to be called, but last line in .csv does not contain ".dat"
-      }
       out.append(String.valueOf(block.getBlockId())).append(delim);
       out.append(psl.getPath().toString()).append(delim);
       out.append(Long.toString(psl.getOffset())).append(delim);
@@ -459,10 +458,14 @@ public class TextFileRegionAliasMap
                 .append(new String(psl.getNonce(), Charset.forName("UTF-8")));
       }
       out.append("\n");
+
+      LOG.info(stored + " block: " + block.getBlockId() + " with location " + psl.toString()); // GABRIEL - writes 460 blocks but csv does not contain all
+      stored++;
     }
 
     @Override
     public void close() throws IOException {
+      LOG.info("Closed writer. Stored " + stored + " blocks");
       out.close();
     }
 

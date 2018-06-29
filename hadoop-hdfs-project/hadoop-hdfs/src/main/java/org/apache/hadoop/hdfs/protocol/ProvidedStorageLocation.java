@@ -86,4 +86,9 @@ public class ProvidedStorageLocation {
     result = 31 * result + Arrays.hashCode(nonce);
     return result;
   }
+
+  @Override
+  public String toString() {
+    return path.getName() + ", " + offset + ", " + length + ", " + nonce;
+  }
 }

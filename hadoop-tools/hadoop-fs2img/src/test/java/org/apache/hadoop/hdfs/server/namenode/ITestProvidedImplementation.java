@@ -212,6 +212,8 @@ public class ITestProvidedImplementation {
         }
       }
       LOG.info("found "+inodes.size()+" inodes and " + blocks.size() + " blocks from fs2img");
+      w.close();
+
       w.persistBlocks(blocks); // make sure to start cluster before persisting
       w.persistInodes(inodes);
       return w;

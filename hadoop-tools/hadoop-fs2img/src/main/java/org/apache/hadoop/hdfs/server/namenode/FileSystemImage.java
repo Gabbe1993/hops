@@ -159,9 +159,9 @@ public class FileSystemImage implements Tool {
           }
         }
       }
+      w.close();
       w.persistBlocks(blocks);
       w.persistInodes(inodes);
-
     } catch (IOException e) {
       e.printStackTrace();
     }

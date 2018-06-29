@@ -35,6 +35,7 @@ import org.apache.hadoop.hdfs.server.common.FileRegion;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
+import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.mortbay.log.Log;
 
@@ -145,6 +146,9 @@ public class ImageWriter implements Closeable {
     if (closed) {
       return;
     }
+    // close side files
+    IOUtils.cleanup(null, aliasMapWriter);
+
     closed = true;
   }
 
