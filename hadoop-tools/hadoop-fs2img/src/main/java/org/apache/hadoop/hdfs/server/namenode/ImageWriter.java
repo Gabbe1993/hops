@@ -94,14 +94,18 @@ public class ImageWriter implements Closeable {
   public INode accept(TreePath e) throws IOException {
     assert e.getParentId() < curInode.get();
     // allocate ID
-    int id = curInode.getAndIncrement();
-    e.accept(id);
-    assert e.getId() < curInode.get();
-    INode n = e.toINode(ugis, blockIds, aliasMapWriter);
+    if(e.getParentId()>0){
+      int id = curInode.getAndIncrement();
+      e.accept(id);
+      assert e.getId() < curInode.get();
+      INode n = e.toINode(ugis, blockIds, aliasMapWriter);
 
-    n.setParentIdNoPersistance(e.getParentId()); // GABRIEL - is parent id enough or do we need to set parent inode?
-
-    return n;
+      n.setParentIdNoPersistance(e.getParentId()); // GABRIEL - is parent id enough or do we need to set parent inode?
+      return n;
+    } else {
+      e.accept(1);
+      return null;
+    }
   }
 
   void persistInodes(List<INode> inodes) throws IOException {

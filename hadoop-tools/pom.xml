@@ -45,7 +45,7 @@
     <module>hadoop-openstack</module>
     <module>hadoop-sls</module>
     <module>distributedLoadSimulator</module>
-   <!-- <module>hadoop-fs2img</module> -->
+    <module>hadoop-fs2img</module>
   </modules>
 
   <build>

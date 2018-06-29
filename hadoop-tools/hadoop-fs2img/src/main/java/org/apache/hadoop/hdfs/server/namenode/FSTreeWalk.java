@@ -47,7 +47,7 @@ public class FSTreeWalk extends TreeWalk {
 
   @Override
   protected Iterable<TreePath> getChildren(TreePath path, int id,
-      TreeIterator i) {
+      TreeIterator i, short depth) {
     // TODO symlinks
     if (!path.getFileStatus().isDirectory()) {
       return Collections.emptyList();
@@ -55,7 +55,7 @@ public class FSTreeWalk extends TreeWalk {
     try {
       ArrayList<TreePath> ret = new ArrayList<>();
       for (FileStatus s : fs.listStatus(path.getFileStatus().getPath())) {
-        ret.add(new TreePath(s, id, i, fs));
+        ret.add(new TreePath(s, id, i, fs, depth));
       }
       return ret;
     } catch (FileNotFoundException e) {
@@ -72,13 +72,13 @@ public class FSTreeWalk extends TreeWalk {
 
     FSTreeIterator(TreePath p) {
       getPendingQueue().addFirst(
-          new TreePath(p.getFileStatus(), p.getParentId(), this, fs));
+          new TreePath(p.getFileStatus(), p.getParentId(), this, fs, p.getMyDepth()));
     }
 
     FSTreeIterator(Path p) throws IOException {
       try {
         FileStatus s = fs.getFileStatus(root);
-        getPendingQueue().addFirst(new TreePath(s, -1, this, fs));
+        getPendingQueue().addFirst(new TreePath(s, -1, this, fs, (short)0));
       } catch (FileNotFoundException e) {
         if (p.equals(root)) {
           throw e;

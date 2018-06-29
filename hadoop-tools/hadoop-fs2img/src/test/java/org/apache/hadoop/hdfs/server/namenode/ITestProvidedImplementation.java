@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import io.hops.metadata.HdfsStorageFactory;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
@@ -83,7 +84,7 @@ public class ITestProvidedImplementation {
   private final String fileSuffix = ".dat";
   private final int baseFileLen = 1024;
   private long providedDataSize = 0;
-  private String bpid = "BP-377981532-127.0.1.1-1530186677514"; // TODO: GABRIEL - This NEEDS to match bpid from Hops. Should be retrived from db. Now has to be changed with each new bpid!
+  private String bpid = "BP-2070509985-10.112.11.31-1530188246938"; // TODO: GABRIEL - This NEEDS to match bpid from Hops. Should be retrived from db. Now has to be changed with each new bpid!
 
   private Configuration conf;
   private MiniDFSCluster cluster;
@@ -123,6 +124,18 @@ public class ITestProvidedImplementation {
 
     conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR_PROVIDED,
         new File(providedPath.toUri()).toString());
+    
+    HdfsStorageFactory.setConfiguration(conf);
+    HdfsStorageFactory.formatStorage();
+    DFSTestUtil.formatNameNode(conf);
+    
+    try {
+      bpid = StorageInfo.getStorageInfoFromDB().getBlockPoolId(); // TODO throws exception
+      LOG.info("Block pool id from db = " + bpid);
+    } catch (IOException e) {
+      LOG.error("Failed to load block pool id from db = " + bpid);
+    }
+
     File imageDir = new File(providedPath.toUri());
     if (!imageDir.exists()) {
       LOG.info("Creating directory: " + imageDir);
@@ -191,12 +204,16 @@ public class ITestProvidedImplementation {
     try (ImageWriter w = new ImageWriter(opts)) {
       for (TreePath e : t) {
         INode inode = w.accept(e);
-        inodes.add(inode);
-        if(inode instanceof INodeFile)
-          blocks.addAll(e.getBlockInfos());
+        if (inode != null) {
+          inodes.add(inode);
+          if (inode instanceof INodeFile) {
+            blocks.addAll(e.getBlockInfos());
+          }
+        }
       }
       LOG.info("found "+inodes.size()+" inodes and " + blocks.size() + " blocks from fs2img");
-
+      w.persistBlocks(blocks); // make sure to start cluster before persisting
+      w.persistInodes(inodes);
       return w;
     } catch (IOException e) {
       e.printStackTrace();
@@ -245,8 +262,7 @@ public class ITestProvidedImplementation {
     cluster.waitActive();
 
     if(writer != null) {
-      writer.persistBlocks(blocks); // make sure to start cluster before persisting
-      writer.persistInodes(inodes);
+      
     } else {
       LOG.warn("TextWriter is null, will not persist to db");
     }

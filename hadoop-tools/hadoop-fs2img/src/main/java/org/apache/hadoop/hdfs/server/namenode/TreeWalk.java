@@ -38,7 +38,7 @@ public abstract class TreeWalk implements Iterable<TreePath> {
    * @return paths representing the children of the current node.
    */
   protected abstract Iterable<TreePath> getChildren(
-      TreePath path, int id, TreeWalk.TreeIterator iterator);
+      TreePath path, int id, TreeWalk.TreeIterator iterator, short depth);
 
   public abstract TreeIterator iterator();
 
@@ -75,8 +75,8 @@ public abstract class TreeWalk implements Iterable<TreePath> {
       throw new UnsupportedOperationException();
     }
 
-    protected void onAccept(TreePath p, int id) {
-      for (TreePath k : getChildren(p, id, this)) {
+    protected void onAccept(TreePath p, int id, short depth) {
+      for (TreePath k : getChildren(p, id, this, depth)) {
         pending.addFirst(k);
       }
     }

@@ -152,9 +152,12 @@ public class FileSystemImage implements Tool {
     try (ImageWriter w = new ImageWriter(opts)) {
       for (TreePath e : new FSTreeWalk(new Path(rem[0]), getConf())) {
         INode inode = w.accept(e);
-        inodes.add(inode);
-        if(inode instanceof INodeFile)
-          blocks.addAll(e.getBlockInfos());  // GABRIEL - test. only adding blocks if file and not directory
+        if (inode != null) {
+          inodes.add(inode);
+          if (inode instanceof INodeFile) {
+            blocks.addAll(e.getBlockInfos());  // GABRIEL - test. only adding blocks if file and not directory
+          }
+        }
       }
       w.persistBlocks(blocks);
       w.persistInodes(inodes);

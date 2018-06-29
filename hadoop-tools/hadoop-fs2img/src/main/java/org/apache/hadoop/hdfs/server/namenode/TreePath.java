@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.apache.hadoop.hdfs.DFSUtil;
 
 import static org.apache.hadoop.hdfs.DFSUtil.LOG;
 import static org.apache.hadoop.hdfs.DFSUtil.getNameNodesRPCAddresses;
@@ -51,16 +52,18 @@ public class TreePath {
   private final TreeWalk.TreeIterator i;
   private final FileSystem fs;
   private List<BlockInfo> blocks = new ArrayList<>();
+  private short myDepth = -1;
 
   public static final long DEFAULT_NAMESPACE_QUOTA = Long.MAX_VALUE; // from DirectoryWithQuotaFeature
   public static final long DEFAULT_STORAGE_SPACE_QUOTA = HdfsConstants.QUOTA_RESET; // from DirectoryWithQuotaFeature
 
   protected TreePath(FileStatus stat, int parentId, TreeWalk.TreeIterator i,
-      FileSystem fs) {
+      FileSystem fs, short myDepth) {
     this.i = i;
     this.stat = stat;
     this.parentId = parentId;
     this.fs = fs;
+    this.myDepth = myDepth;
   }
 
   public FileStatus getFileStatus() {
@@ -69,6 +72,10 @@ public class TreePath {
 
   public int getParentId() {
     return parentId;
+  }
+  
+  public short getMyDepth(){
+    return myDepth;
   }
 
   public int getId() {
@@ -80,7 +87,7 @@ public class TreePath {
 
   void accept(int id) {
     this.id = (id);
-    i.onAccept(this, id);
+    i.onAccept(this, id, (short)(myDepth+1));
   }
 
   public INode toINode(UGIResolver ugi, BlockResolver blk,
@@ -134,7 +141,7 @@ public class TreePath {
             blk.preferredBlockSize(s),
             HdfsConstants.PROVIDED_STORAGE_POLICY_ID);
 
-    setProperties(inode, s, ugi);
+    setProperties(inode, s, ugi, myDepth);
     // pathhandle allows match as long as the file matches exactly.
     PathHandle pathHandle = null;
     if (fs != null) {
@@ -149,6 +156,7 @@ public class TreePath {
     // TODO: storage policy should be configurable per path; use BlockResolver
     long off = 0L;
     for (BlockInfo block : blk.resolve(s)) {
+      inode.setHasBlocksNoPersistance(true);
       blocks.add(block);
       writeBlock(block.getBlockId(), off, block.getNumBytes(),
               block.getGenerationStamp(), pathHandle, out);
@@ -159,12 +167,12 @@ public class TreePath {
     return inode;
   }
 
-  private void setProperties(INode inode, FileStatus s, UGIResolver ugi) {
+  private void setProperties(INode inode, FileStatus s, UGIResolver ugi, short myDepth) {
     inode.setIdNoPersistance(id);
     inode.setLocalNameNoPersistance(string2Bytes(s.getPath().getName()));
     inode.setUserIDNoPersistance(ugi.getUserId(ugi.user(s)));
     inode.setGroupIDNoPersistance(ugi.getGroupId(ugi.group(s)));
-    inode.setPartitionIdNoPersistance(0);
+    inode.setPartitionIdNoPersistance(INode.calculatePartitionId(getParentId(), s.getPath().getName(), myDepth));
   }
 
 
@@ -180,7 +188,7 @@ public class TreePath {
     inodeDir.setModificationTimeNoPersistance(s.getModificationTime());
     inodeDir.setAccessTimeNoPersistance(s.getAccessTime());
 
-    setProperties(inodeDir, s, ugi);
+    setProperties(inodeDir, s, ugi, myDepth);
 
     return inodeDir;
   }
