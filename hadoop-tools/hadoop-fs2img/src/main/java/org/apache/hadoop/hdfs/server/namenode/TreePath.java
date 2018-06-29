@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.apache.hadoop.hdfs.DFSUtil;
+import org.mortbay.log.Log;
 
 import static org.apache.hadoop.hdfs.DFSUtil.LOG;
 import static org.apache.hadoop.hdfs.DFSUtil.getNameNodesRPCAddresses;
@@ -155,12 +156,14 @@ public class TreePath {
     blocks = new ArrayList<>();
     // TODO: storage policy should be configurable per path; use BlockResolver
     long off = 0L;
+    int blkIndex = 0;
     for (BlockInfo block : blk.resolve(s)) {
       inode.setHasBlocksNoPersistance(true);
       blocks.add(block);
       writeBlock(block.getBlockId(), off, block.getNumBytes(),
               block.getGenerationStamp(), pathHandle, out);
       block.setINodeIdNoPersistance(id);
+      block.setBlockIndexNoPersistance(blkIndex++);
       off += block.getNumBytes();
     }
 
