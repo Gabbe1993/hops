@@ -262,6 +262,8 @@ public class BlockInfo extends Block {
             getInodeId());
     if (replicas == null) {
       replicas = EMPTY_REPLICAS_ARRAY;
+    } else if(replicas.size() == 0) {
+      System.err.println("Replicas empty"); // TODO: GABRIEL - returns 0 replicas tho correct parameters and replica stored in db
     } else {
       Collections.sort(replicas, Replica.Order.ByStorageId);
     }

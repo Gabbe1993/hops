@@ -44,6 +44,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * This class allows us to manage and multiplex between storages local to
@@ -57,7 +61,7 @@ public class ProvidedStorageMap {
       LoggerFactory.getLogger(ProvidedStorageMap.class);
 
   // limit to a single provider for now
-  private RwLock lock;
+  private ReadWriteLock lock;
   private BlockManager bm;
   private BlockAliasMap aliasMap;
 
@@ -68,11 +72,7 @@ public class ProvidedStorageMap {
   private long capacity;
   private int defaultReplication;
 
-  ProvidedStorageMap(BlockManager bm, Configuration conf) throws IOException {
-    this(null, bm, conf);
-  }
-
-  ProvidedStorageMap(RwLock lock, BlockManager bm, Configuration conf)
+  ProvidedStorageMap(BlockManager bm, Configuration conf)
       throws IOException {
 
     storageId = conf.get(DFSConfigKeys.DFS_PROVIDER_STORAGEUUID,
@@ -98,7 +98,7 @@ public class ProvidedStorageMap {
         DFSConfigKeys.DFS_REPLICATION_DEFAULT);
 
     this.bm = bm;
-    this.lock = lock;
+    this.lock = new ReentrantReadWriteLock();
 
     // load block reader into storage
     Class<? extends BlockAliasMap> aliasMapClass = conf.getClass(
@@ -120,6 +120,7 @@ public class ProvidedStorageMap {
    */
   DatanodeStorageInfo getStorage(DatanodeDescriptor dn, DatanodeStorage s)
       throws IOException {
+    LOG.info("Called getStorage ");
     if (providedEnabled && storageId.equals(s.getStorageID())) {
       if (StorageType.PROVIDED.equals(s.getStorageType())) {
         if (providedStorageInfo.getState() == State.FAILED
@@ -140,20 +141,29 @@ public class ProvidedStorageMap {
 
   private void processProvidedStorageReport()
       throws IOException {
-  //  assert lock.hasWriteLock() : "Not holding write lock";
-    if (providedStorageInfo.getBlockReportCount() == 0
-        || providedDescriptor.activeProvidedDatanodes() == 0) {
-      LOG.info("Calling process first blk report from PROVIDED storage: "
-          + providedStorageInfo);
-      // first pass; periodic refresh should call bm.processReport
-      BlockAliasMap.Reader<BlockAlias> reader =
-          aliasMap.getReader(null, bm.getBlockPoolId());
-      if (reader != null) {
-        // TODO: GABRIEL - should use first process code
-        bm.processReport(providedStorageInfo,
-                BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)
-                        .addAllAsFinalized(reader.iterator()).build()); // TODO: GABRIEL - test. Using hops block report code
+    // lock.hasWriteLock() : "Not holding write lock";
+    if(lock.writeLock().tryLock()) {
+      LOG.info("Acquired write lock and called processProvidedStorageReport()");
+      try {
+        if (providedStorageInfo.getBlockReportCount() == 0
+                || providedDescriptor.activeProvidedDatanodes() == 0) {
+          LOG.info("Calling process first blk report from PROVIDED storage: "
+                  + providedStorageInfo);
+          // first pass; periodic refresh should call bm.processReport
+          BlockAliasMap.Reader<BlockAlias> reader =
+                  aliasMap.getReader(null, bm.getBlockPoolId());
+          if (reader != null) {
+            // TODO: GABRIEL - should use first process code
+            bm.processReport(providedStorageInfo,
+                    BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)
+                            .addAllAsFinalized(reader.iterator()).build()); // TODO: GABRIEL - test. Using hops block report code
+          }
+        }
+      } finally {
+        lock.writeLock().unlock();
       }
+    } else {
+      LOG.error("Cannot acquire write lock");
     }
   }
 
@@ -171,11 +181,19 @@ public class ProvidedStorageMap {
 
   public void removeDatanode(DatanodeDescriptor dnToRemove) {
     if (providedEnabled) {
-      assert lock.hasWriteLock() : "Not holding write lock";
-      providedDescriptor.remove(dnToRemove);
-      // if all datanodes fail, set the block report count to 0
-      if (providedDescriptor.activeProvidedDatanodes() == 0) {
-        providedStorageInfo.setBlockReportCount(0);
+      //assert lock.hasWriteLock() : "Not holding write lock";
+      if(lock.writeLock().tryLock()) {
+        try {
+          providedDescriptor.remove(dnToRemove);
+          // if all datanodes fail, set the block report count to 0
+          if (providedDescriptor.activeProvidedDatanodes() == 0) {
+            providedStorageInfo.setBlockReportCount(0);
+          }
+        } finally {
+          lock.writeLock().unlock();
+        }
+      } else {
+        LOG.error("Cannot acquire write lock");
       }
     }
   }
@@ -330,6 +348,7 @@ public class ProvidedStorageMap {
 
     DatanodeStorageInfo getProvidedStorage(
         DatanodeDescriptor dn, DatanodeStorage s) {
+      LOG.info("Added to storage map: " + dn.getDatanodeUuid());
       dns.put(dn.getDatanodeUuid(), dn);
       dnR.add(dn);
       return storageMap.get(s.getStorageID());

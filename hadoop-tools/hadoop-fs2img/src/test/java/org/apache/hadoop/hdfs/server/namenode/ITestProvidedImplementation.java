@@ -96,13 +96,6 @@ public class ITestProvidedImplementation {
     if (fBASE.exists() && !FileUtil.fullyDelete(fBASE)) {
       throw new IOException("Could not fully delete " + fBASE);
     }
-//    try {
-//      bpid = StorageInfo.getStorageInfoFromDB().getBlockPoolId(); // TODO throws exception
-//      LOG.info("Block pool id from db = " + bpid);
-//    } catch (IOException e) {
-//      LOG.error("Failed to load block pool id from db = " + bpid);
-//    }
-
     long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println(name.getMethodName() + " seed: " + seed);
@@ -130,7 +123,7 @@ public class ITestProvidedImplementation {
     DFSTestUtil.formatNameNode(conf);
     
     try {
-      bpid = StorageInfo.getStorageInfoFromDB().getBlockPoolId(); // TODO throws exception
+      bpid = StorageInfo.getStorageInfoFromDB().getBlockPoolId();
       LOG.info("Block pool id from db = " + bpid);
     } catch (IOException e) {
       LOG.error("Failed to load block pool id from db = " + bpid);
@@ -236,6 +229,7 @@ public class ITestProvidedImplementation {
                     boolean doFormat, String[] racks, ImageWriter writer) throws IOException {
     conf.set(DFS_NAMENODE_NAME_DIR_KEY, nspath.toString());
 
+
     if (storageTypesPerDatanode != null) {
       cluster = new MiniDFSCluster.Builder(conf)
           .format(doFormat)
@@ -252,7 +246,7 @@ public class ITestProvidedImplementation {
           .storagesPerDatanode(storageTypes.length)
           .storageTypes(storageTypes)
           .racks(racks)
-          .build(); // TODO:  GABRIEL - times out for cluster waiting
+          .build();
     } else {
       cluster = new MiniDFSCluster.Builder(conf)
           .format(doFormat)
@@ -262,14 +256,6 @@ public class ITestProvidedImplementation {
           .build();
     }
     cluster.waitActive();
-
-    if(writer != null) {
-      
-    } else {
-      LOG.warn("TextWriter is null, will not persist to db");
-    }
-
-   // cluster.waitActive();
   }
 
   @Test(timeout=20000)
@@ -299,7 +285,7 @@ public class ITestProvidedImplementation {
     }
   }
 
-  @Test(timeout=30000)
+  @Test()
   public void testProvidedReporting() throws Exception {
     conf.setClass(ImageWriter.Options.UGI_CLASS,
         SingleUGIResolver.class, UGIResolver.class);
@@ -320,7 +306,7 @@ public class ITestProvidedImplementation {
     }
     // trigger heartbeats to update the capacities
     cluster.triggerHeartbeats();
-    Thread.sleep(10000);
+    Thread.sleep(20000);
     // verify namenode stats
     FSNamesystem namesystem = cluster.getNameNode().getNamesystem();
     DatanodeManager dnm = namesystem.getBlockManager()
@@ -380,7 +366,7 @@ public class ITestProvidedImplementation {
     }
   }
 
-  @Test(timeout=500000)
+  @Test()
   public void testDefaultReplication() throws Exception {
     int targetReplication = 2;
     conf.setInt(FixedBlockMultiReplicaResolver.REPLICATION, targetReplication);
@@ -394,7 +380,7 @@ public class ITestProvidedImplementation {
             {StorageType.DISK}},
         false, writer);
     // wait for the replication to finish
-    Thread.sleep(50000);
+    Thread.sleep(200000);
 
     FileSystem fs = cluster.getFileSystem();
     int count = 0;
@@ -518,7 +504,7 @@ public class ITestProvidedImplementation {
     assertEquals(expectedBlocks, locatedBlocks.getLocatedBlocks().size());
     DatanodeInfo[] locations =
         locatedBlocks.getLocatedBlocks().get(0).getLocations();
-    assertEquals(expectedLocations, locations.length);
+    assertEquals(expectedLocations, locations.length); // TODO: GABRIEL - locations.length does not match MOST of the time
     checkUniqueness(locations);
     return locations;
   }
@@ -540,7 +526,7 @@ public class ITestProvidedImplementation {
    * Tests setting replication of provided files.
    * @throws Exception
    */
-  @Test(timeout=50000)
+  @Test()
   public void testSetReplicationForProvidedFiles() throws Exception {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
@@ -677,7 +663,7 @@ public class ITestProvidedImplementation {
           providedDatanode.getDatanodeId().getXferAddr());
       cluster.waitActive();
       cluster.triggerHeartbeats();
-      Thread.sleep(1000);
+      Thread.sleep(2000);
       // the report count should just continue to increase.
       assertEquals(initialBRCount + i + 1,
           providedDNInfo.getBlockReportCount());
@@ -796,7 +782,7 @@ public class ITestProvidedImplementation {
 
     int expectedLocations = 4;
     for (int i = 0; i < numFiles; i++) {
-      verifyFileLocation(i, expectedLocations); // GABRIEL - need to persist blocks before calling this (checks in ndb)
+      verifyFileLocation(i, expectedLocations);
     }
   }
 

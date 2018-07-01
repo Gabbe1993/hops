@@ -69,8 +69,7 @@ public class TestProvidedStorageMap {
 
   @Test
   public void testProvidedStorageMap() throws IOException {
-    ProvidedStorageMap providedMap = new ProvidedStorageMap(
-        nameSystemLock, bm, conf);
+    ProvidedStorageMap providedMap = new ProvidedStorageMap(bm, conf);
     DatanodeStorageInfo providedMapStorage =
         providedMap.getProvidedStorageInfo();
     // the provided storage cannot be null

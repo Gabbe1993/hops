@@ -948,7 +948,7 @@ public class BlockManager {
           " but corrupt replicas map has " + numCorruptReplicas);
     }
 
-    final int numNodes = blocksMap.numNodes(blk);
+    final int numNodes = blocksMap.numNodes(blk); // TODO: GABRIEL - !!! does not find any replicas. numNodes = 0 causes block to be corrupt
     final boolean isCorrupt = numCorruptNodes == numNodes;
     final int numMachines = isCorrupt ? numNodes : numNodes - numCorruptNodes;
     final DatanodeStorageInfo[] storages = new DatanodeStorageInfo[numMachines];
@@ -1189,7 +1189,7 @@ public class BlockManager {
    */
   void datanodeRemoved(final DatanodeDescriptor node)
       throws IOException {
-    //providedStorageMap.removeDatanode(node);
+    providedStorageMap.removeDatanode(node);
     final Iterator<? extends Block> it = node.getBlockIterator();
     while(it.hasNext()) {
       removeStoredBlockTx(it.next().getBlockId(), node);
@@ -2063,6 +2063,7 @@ public class BlockManager {
   public boolean processReport(final DatanodeID nodeID,
       final DatanodeStorage storage,
       final BlockReport newReport) throws IOException {
+    LOG.info("Called processReport");
     final long startTime = Time.now(); //after acquiring write lock
 
     DatanodeDescriptor node = datanodeManager.getDatanode(nodeID);
@@ -2093,12 +2094,12 @@ public class BlockManager {
 
     ReportStatistics reportStatistics = new ReportStatistics();
 
-    if(!storageInfo.getStorageType().equals(StorageType.PROVIDED)) {
+   // if(!storageInfo.getStorageType().equals(StorageType.PROVIDED)) {
       // Get the storageinfo object that we are updating in this processreport
       reportStatistics = processReport(storageInfo, newReport); // GABRIEL - should we skip if provided?
-    } else {
-      LOG.info("Skipping block reporting for PROVIDED volume");
-    }
+   // } else {
+   //   LOG.info("Skipping block reporting for PROVIDED volume");
+   // }
 
     // Now that we have an up-to-date block report, we know that any
     // deletions from a previous NN iteration have been accounted for.
@@ -2210,7 +2211,7 @@ public class BlockManager {
 
     final boolean firstBlockReport =
             (namesystem.isInStartupSafeMode() && storage.getBlockReportCount() == 0)
-            || storage.getStorageType().equals(StorageType.PROVIDED);
+            || storage.getStorageType().equals(StorageType.PROVIDED); // GABRIEL - should always be firstBlockReport if provided?
     ReportStatistics reportStatistics = reportDiff(storage, report, toAdd, toRemove, toInvalidate, toCorrupt,
         toUC, firstBlockReport);
 
@@ -2262,7 +2263,7 @@ public class BlockManager {
     }
     addToInvalidates(toInvalidate, storage);
 
-    for (Long b : toRemove) {
+    for (Long b : toRemove) { // GABRIEL : all provided blocks gets added for removal
       removeStoredBlockTx(b, storage.getDatanodeDescriptor());
     }
     return reportStatistics;
@@ -2367,7 +2368,7 @@ public class BlockManager {
         .getAllMachineReplicasInBuckets(matchingResult.mismatchedBuckets, storage.getSid());
 
 
-    final Set<Long> allMismatchedBlocksOnServer = mismatchedBlocksAndInodes.keySet();
+    final Set<Long> allMismatchedBlocksOnServer = mismatchedBlocksAndInodes.keySet(); // GABRIEL - all provided blocks are added here
     aggregatedSafeBlocks.addAll(allMismatchedBlocksOnServer);
 
     for (final int bucketId : matchingResult.mismatchedBuckets){
@@ -3482,17 +3483,17 @@ public class BlockManager {
 //    if (blockLog.isDebugEnabled()) {
       blockLog.info("BLOCK* removeStoredBlock: " + block + " from " + node);
 //    }
-//    try{
-    if (!blocksMap.removeNode(block, node)) {
-//      if (blockLog.isDebugEnabled()) {
-        blockLog.info("BLOCK* removeStoredBlock: " + block +
-            " has already been removed from node " + node);
-//      }
-      return;
+    try{
+      if (!blocksMap.removeNode(block, node)) {
+  //      if (blockLog.isDebugEnabled()) {
+          blockLog.info("BLOCK* removeStoredBlock: " + block +
+              " has already been removed from node " + node);
+  //      }
+        return;
+      }
+      }catch(Exception e){
+        LOG.error(e);
     }
-//    }catch(Exception e){
-//      LOG.error(e);
-//    }
     blockLog.info("BLOCK* removeStoredBlock: " + block +
             " has already been removed from node " + node);
     //

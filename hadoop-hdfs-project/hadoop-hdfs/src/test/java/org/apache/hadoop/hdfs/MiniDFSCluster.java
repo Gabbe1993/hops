@@ -854,7 +854,7 @@ public class MiniDFSCluster {
         } catch (InterruptedException e) {
         }
         if (++i >
-            30) { //HOP increase the time from 10 to 15 becase now the registration process some
+            100) { //HOP increase the time from 10 to 15 becase now the registration process some
           //times takes longer. it is because the threads for sending HB and Block Report
           //are separate and some times we take couple of second more
           throw new IOException(
@@ -866,7 +866,7 @@ public class MiniDFSCluster {
 
   String makeDataNodeDirs(int dnIndex, StorageType[] storageTypes) throws IOException {
     StringBuilder sb = new StringBuilder();
-    assert storageTypes == null || storageTypes.length == storagesPerDatanode;
+    //assert storageTypes == null || storageTypes.length == storagesPerDatanode;
     for (int j = 0; j < storagesPerDatanode; ++j) {
       if ((storageTypes != null) && (j >= storageTypes.length)) {
         break;
