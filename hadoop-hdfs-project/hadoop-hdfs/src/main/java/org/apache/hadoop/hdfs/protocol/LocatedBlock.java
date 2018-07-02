@@ -137,10 +137,10 @@ public class LocatedBlock {
     this.offset = startOffset;
     this.corrupt = corrupt;
     if(corrupt) {
-      System.err.println("corrupt located block ! ");
+      System.err.println("corrupt located block! ");
     }
     this.locs = null == locs ? EMPTY_LOCS : locs;
-    System.out.println("locs.length = "+ locs.length); // TODO: GABRIEL - locations.length does not match most of the time
+    // System.out.println("locs.length = "+ locs.length); // TODO: GABRIEL - locations.length does not match most of the time
     this.storageIDs = storageIDs;
     this.storageTypes = storageTypes;
     this.cachedLocs = null == cachedLocs || 0 == cachedLocs.length

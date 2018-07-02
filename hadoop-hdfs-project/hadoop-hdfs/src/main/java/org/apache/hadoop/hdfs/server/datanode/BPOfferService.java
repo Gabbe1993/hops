@@ -935,7 +935,7 @@ public class IncrementalBRTask implements Callable{
       }
 
       // Get a namenode to send the report(s) to
-      ActiveNode an = nextNNForBlkReport(totalBlockCount); // TODO: GABRIEL - null in provided test
+      ActiveNode an = nextNNForBlkReport(totalBlockCount);
       if (an != null) {
         blkReportHander = getAnActor(an.getRpcServerAddressForDatanodes());
         if (blkReportHander == null || !blkReportHander.isInitialized()) {

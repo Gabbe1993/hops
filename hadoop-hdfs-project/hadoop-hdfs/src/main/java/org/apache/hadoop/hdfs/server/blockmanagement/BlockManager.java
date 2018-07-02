@@ -1220,6 +1220,7 @@ public class BlockManager {
       throws IOException {
     final Iterator<BlockInfo> it = storageInfo.getBlockIterator();
     final DatanodeDescriptor node = storageInfo.getDatanodeDescriptor();
+    providedStorageMap.removeDatanode(node);
     while(it.hasNext()) {
       final BlockInfo block = it.next();
       new HopsTransactionalRequestHandler(HDFSOperationType.REMOVE_STORED_BLOCK) {
@@ -2094,12 +2095,8 @@ public class BlockManager {
 
     ReportStatistics reportStatistics = new ReportStatistics();
 
-   // if(!storageInfo.getStorageType().equals(StorageType.PROVIDED)) {
-      // Get the storageinfo object that we are updating in this processreport
-      reportStatistics = processReport(storageInfo, newReport); // GABRIEL - should we skip if provided?
-   // } else {
-   //   LOG.info("Skipping block reporting for PROVIDED volume");
-   // }
+    // Get the storageinfo object that we are updating in this processreport
+    reportStatistics = processReport(storageInfo, newReport); // GABRIEL - should we skip if provided?
 
     // Now that we have an up-to-date block report, we know that any
     // deletions from a previous NN iteration have been accounted for.

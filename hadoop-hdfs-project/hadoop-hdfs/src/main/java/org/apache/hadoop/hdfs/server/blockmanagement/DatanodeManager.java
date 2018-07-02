@@ -395,7 +395,7 @@ public class DatanodeManager {
   }
 
   public DatanodeDescriptor getDatanodeBySid(final int sid) {
-    DatanodeStorageInfo storage = this.getStorage(sid);
+    DatanodeStorageInfo storage = this.getStorage(sid); // TODO: GABRIEL - returns null when sid = -1
 
     return (storage == null) ? null : storage.getDatanodeDescriptor();
   }

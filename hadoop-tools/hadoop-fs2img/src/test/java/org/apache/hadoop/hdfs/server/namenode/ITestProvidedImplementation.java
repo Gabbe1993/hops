@@ -366,6 +366,7 @@ public class ITestProvidedImplementation {
     }
   }
 
+  // TODO: GABRIEL - Fails when hop_gabriel.hdfs_replicas.storage_id = -1 and not 1
   @Test()
   public void testDefaultReplication() throws Exception {
     int targetReplication = 2;
@@ -504,7 +505,7 @@ public class ITestProvidedImplementation {
     assertEquals(expectedBlocks, locatedBlocks.getLocatedBlocks().size());
     DatanodeInfo[] locations =
         locatedBlocks.getLocatedBlocks().get(0).getLocations();
-    assertEquals(expectedLocations, locations.length); // TODO: GABRIEL - locations.length does not match MOST of the time
+    assertEquals(expectedLocations, locations.length); // TODO: GABRIEL - locations.length does not match most of the time
     checkUniqueness(locations);
     return locations;
   }

@@ -363,7 +363,7 @@ public class ProvidedStorageMap {
 
 /*
     try {
-        globalStorageMap.updateStorage(storage); // TODO: GABRIEL - update global storage map?
+        globalStorageMap.updateStorage(storage); // TODO: GABRIEL - update global storage map
       } catch (IOException e) {
         e.printStackTrace();
       }
