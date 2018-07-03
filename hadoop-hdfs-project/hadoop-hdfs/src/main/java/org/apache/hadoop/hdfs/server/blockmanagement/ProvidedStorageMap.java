@@ -148,7 +148,6 @@ public class ProvidedStorageMap {
       BlockAliasMap.Reader<BlockAlias> reader =
               aliasMap.getReader(null, bm.getBlockPoolId());
       if (reader != null) {
-        // TODO: GABRIEL - should use first process code
         bm.processReport(providedStorageInfo,
                 BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)
                         .addAllAsFinalized(reader.iterator()).build());
@@ -197,7 +196,6 @@ public class ProvidedStorageMap {
             storage, node);
       }
     }
-    node.updateStorage(storage);
   }
 
   private boolean isProvidedStorage(String dnStorageId) {
