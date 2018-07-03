@@ -131,7 +131,7 @@ public class StorageMap {
         this.datanodeUuidToSids.put(datanodeUuid, sids);
       }
 
-      if(! sids.contains(sid)) { // We haven't seen this sid on this DN yet
+      if(!sids.contains(sid)) { // We haven't seen this sid on this DN yet
         // Add in hashmap
         sids.add(sid);
 

@@ -120,7 +120,6 @@ public class ProvidedStorageMap {
    */
   DatanodeStorageInfo getStorage(DatanodeDescriptor dn, DatanodeStorage s)
       throws IOException {
-    LOG.info("Called getStorage ");
     if (providedEnabled && storageId.equals(s.getStorageID())) {
       if (StorageType.PROVIDED.equals(s.getStorageType())) {
         if (providedStorageInfo.getState() == State.FAILED
@@ -139,31 +138,21 @@ public class ProvidedStorageMap {
     return dn.getStorageInfo(s.getStorageID());
   }
 
-  private void processProvidedStorageReport()
+  private synchronized void processProvidedStorageReport()
       throws IOException {
-    // lock.hasWriteLock() : "Not holding write lock";
-    if(lock.writeLock().tryLock()) {
-      LOG.info("Acquired write lock and called processProvidedStorageReport()");
-      try {
-        if (providedStorageInfo.getBlockReportCount() == 0
-                || providedDescriptor.activeProvidedDatanodes() == 0) {
-          LOG.info("Calling process first blk report from PROVIDED storage: "
-                  + providedStorageInfo);
-          // first pass; periodic refresh should call bm.processReport
-          BlockAliasMap.Reader<BlockAlias> reader =
-                  aliasMap.getReader(null, bm.getBlockPoolId());
-          if (reader != null) {
-            // TODO: GABRIEL - should use first process code
-            bm.processReport(providedStorageInfo,
-                    BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)
-                            .addAllAsFinalized(reader.iterator()).build()); // TODO: GABRIEL - test. Using hops block report code
-          }
-        }
-      } finally {
-        lock.writeLock().unlock();
+    if (providedStorageInfo.getBlockReportCount() == 0
+            || providedDescriptor.activeProvidedDatanodes() == 0) {
+      LOG.info("Calling process first blk report from PROVIDED storage: "
+              + providedStorageInfo);
+      // first pass; periodic refresh should call bm.processReport
+      BlockAliasMap.Reader<BlockAlias> reader =
+              aliasMap.getReader(null, bm.getBlockPoolId());
+      if (reader != null) {
+        // TODO: GABRIEL - should use first process code
+        bm.processReport(providedStorageInfo,
+                BlockReport.builder(DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)
+                        .addAllAsFinalized(reader.iterator()).build());
       }
-    } else {
-      LOG.error("Cannot acquire write lock");
     }
   }
 
@@ -179,21 +168,12 @@ public class ProvidedStorageMap {
     return new ProvidedBlocksBuilder(maxValue);
   }
 
-  public void removeDatanode(DatanodeDescriptor dnToRemove) {
+  public synchronized void removeDatanode(DatanodeDescriptor dnToRemove) {
     if (providedEnabled) {
-      //assert lock.hasWriteLock() : "Not holding write lock";
-      if(lock.writeLock().tryLock()) {
-        try {
-          providedDescriptor.remove(dnToRemove);
-          // if all datanodes fail, set the block report count to 0
-          if (providedDescriptor.activeProvidedDatanodes() == 0) {
-            providedStorageInfo.setBlockReportCount(0);
-          }
-        } finally {
-          lock.writeLock().unlock();
-        }
-      } else {
-        LOG.error("Cannot acquire write lock");
+      providedDescriptor.remove(dnToRemove);
+      // if all datanodes fail, set the block report count to 0
+      if (providedDescriptor.activeProvidedDatanodes() == 0) {
+        providedStorageInfo.setBlockReportCount(0);
       }
     }
   }
@@ -206,6 +186,8 @@ public class ProvidedStorageMap {
   }
 
   public void updateStorage(DatanodeDescriptor node, DatanodeStorage storage) throws IOException {
+    System.out.println("ProvidedStorageMap.updateStorage");
+    System.out.println("node = [" + node + "], storage = [" + storage + "]");
     if (isProvidedStorage(storage.getStorageID())) {
       if (StorageType.PROVIDED.equals(storage.getStorageType())) {
         node.injectStorage(providedStorageInfo);
@@ -549,5 +531,9 @@ public class ProvidedStorageMap {
         }
       };
     }
+  }
+
+  public ReadWriteLock getLock() {
+    return lock;
   }
 }

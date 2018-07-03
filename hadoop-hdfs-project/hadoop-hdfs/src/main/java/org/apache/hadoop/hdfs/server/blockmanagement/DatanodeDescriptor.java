@@ -430,7 +430,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
   }
 
   public void updateHeartbeat(StorageReport[] reports, int xceiverCount,
-      int volFailures) {
+                              int volFailures) {
     updateHeartbeatState(reports, xceiverCount, volFailures);
     heartbeatedSinceRegistration = true;
   }

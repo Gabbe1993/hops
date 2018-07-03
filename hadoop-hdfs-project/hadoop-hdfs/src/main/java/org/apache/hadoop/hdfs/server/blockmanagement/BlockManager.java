@@ -34,19 +34,16 @@ import io.hops.metadata.hdfs.dal.MisReplicatedRangeQueueDataAccess;
 import io.hops.metadata.hdfs.entity.EncodingStatus;
 import io.hops.metadata.hdfs.entity.HashBucket;
 import io.hops.metadata.hdfs.entity.INodeIdentifier;
-import io.hops.metadata.hdfs.entity.InvalidatedBlock;
 import io.hops.metadata.security.token.block.NameNodeBlockTokenSecretManager;
 import io.hops.transaction.EntityManager;
 import io.hops.transaction.handler.HDFSOperationType;
 import io.hops.transaction.handler.HopsTransactionalRequestHandler;
 import io.hops.transaction.handler.LightWeightRequestHandler;
 import io.hops.transaction.lock.LockFactory;
-import io.hops.transaction.lock.TransactionLockTypes;
 import io.hops.transaction.lock.TransactionLockTypes.INodeLockType;
 import io.hops.transaction.lock.TransactionLockTypes.LockType;
 import io.hops.transaction.lock.TransactionLocks;
 import io.hops.util.Slicer;
-import org.apache.commons.configuration.SystemConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -63,7 +60,6 @@ import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.protocol.UnregisteredNodeException;
-import org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolServerSideTranslatorPB;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager.AccessMode;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
@@ -77,19 +73,8 @@ import org.apache.hadoop.hdfs.server.namenode.INodeFile;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
 import org.apache.hadoop.hdfs.server.namenode.metrics.NameNodeMetrics;
-import org.apache.hadoop.hdfs.server.protocol.BlockCommand;
-import org.apache.hadoop.hdfs.server.protocol.BlockReport;
-import org.apache.hadoop.hdfs.server.protocol.BlockReportBlock;
-import org.apache.hadoop.hdfs.server.protocol.BlockReportBlockState;
-import org.apache.hadoop.hdfs.server.protocol.BlockReportBucket;
-import org.apache.hadoop.hdfs.server.protocol.BlocksWithLocations;
+import org.apache.hadoop.hdfs.server.protocol.*;
 import org.apache.hadoop.hdfs.server.protocol.BlocksWithLocations.BlockWithLocations;
-import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
-import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
-import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
-import org.apache.hadoop.hdfs.server.protocol.KeyUpdateCommand;
-import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
-import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
 import org.apache.hadoop.hdfs.util.LightWeightLinkedSet;
 import org.apache.hadoop.net.Node;
 import org.apache.hadoop.util.Daemon;
@@ -2077,12 +2062,14 @@ public class BlockManager {
     // that we receive while still in startup phase.
     // Register DN with provided storage, not with storage owned by DN
     // DN should still have a ref to the DNStorageInfo.
-    DatanodeStorageInfo storageInfo = providedStorageMap.getStorage(node, storage);
+    DatanodeStorageInfo storageInfo = providedStorageMap.getStorage(node, storage); // TODO: GABRIEL - fails when returns sid = -1
 
     if (storageInfo == null) {
       // We handle this for backwards compatibility.
       storageInfo = node.updateStorage(storage);
+      // providedStorageMap.updateStorage(node, storage);
     }
+    // GABRIEL - at this point storageInfo.sid should not be -1
 
     // To minimize startup time, we discard any second (or later) block reports
     // that we receive while still in startup phase.
@@ -2096,7 +2083,12 @@ public class BlockManager {
     ReportStatistics reportStatistics = new ReportStatistics();
 
     // Get the storageinfo object that we are updating in this processreport
-    reportStatistics = processReport(storageInfo, newReport); // GABRIEL - should we skip if provided?
+
+    // Block reports for provided storage are not
+    // maintained by DN heartbeats
+    if (!StorageType.PROVIDED.equals(storageInfo.getStorageType())) {
+      reportStatistics = processReport(storageInfo, newReport);
+    }
 
     // Now that we have an up-to-date block report, we know that any
     // deletions from a previous NN iteration have been accounted for.
@@ -3691,6 +3683,12 @@ public class BlockManager {
     }
   }
 
+  public void updateProvidedStorageMap(DatanodeDescriptor node, StorageReport[] reports) throws IOException {
+    for (StorageReport report: reports) {
+      providedStorageMap.updateStorage(node, report.getStorage());
+    }
+  }
+
   /**
    * The given node is reporting incremental information about some blocks.
    * This includes blocks that are starting to be received, completed being
@@ -3727,6 +3725,7 @@ public class BlockManager {
       // uncovered by HDFS-6094.
       s = node.updateStorage(blockInfos.getStorage());
     }
+
     final DatanodeStorageInfo storage = s;
 
 
@@ -4117,6 +4116,32 @@ public class BlockManager {
       throws StorageException, TransactionContextException {
     return blocksMap.getStoredBlock(block);
   }
+
+  public DatanodeStorageInfo[] getStoragesTx(Block blk, DatanodeManager dnm) throws IOException, TransactionContextException, StorageException {
+    return (DatanodeStorageInfo[]) new HopsTransactionalRequestHandler(
+            HDFSOperationType.GET_BLOCK) {
+      INodeIdentifier inodeIdentifier;
+
+      @Override
+      public void setUp() throws StorageException {
+        inodeIdentifier = INodeUtil.resolveINodeFromBlock(blk);
+      }
+
+      @Override
+      public void acquireLock(TransactionLocks locks) throws IOException {
+        LockFactory lf = LockFactory.getInstance();
+        locks.add(lf.getIndividualBlockLock(blk.getBlockId(), inodeIdentifier))
+                .add(lf.getBlockRelated(BLK.RE, BLK.CR, BLK.ER, BLK.UR));
+      }
+
+      @Override
+      public Object performTask() throws StorageException, IOException {
+        BlockInfo blockInfo = getStoredBlock(blk);
+        return blockInfo.getStorages(dnm);
+      }
+    }.handle();
+  }
+
 
   /**
    * updates a block in under replication queue

@@ -1189,6 +1189,7 @@ public class DatanodeManager {
           return new DatanodeCommand[]{RegisterCommand.REGISTER};
         }
 
+        blockManager.updateProvidedStorageMap(nodeinfo, reports); // GABRIEL Update provided storage here
         heartbeatManager.updateHeartbeat(nodeinfo, reports, xceiverCount, failedVolumes);
 
         //check lease recovery

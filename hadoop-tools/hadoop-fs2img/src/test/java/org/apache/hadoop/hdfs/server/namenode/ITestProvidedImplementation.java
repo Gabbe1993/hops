@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import io.hops.metadata.HdfsStorageFactory;
+import io.hops.transaction.EntityManager;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
@@ -348,12 +349,9 @@ public class ITestProvidedImplementation {
       LocatedBlocks locatedBlocks = client.getLocatedBlocks(
           filename, 0, baseFileLen);
       for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
-        BlockInfo blockInfo =
-            bm.getStoredBlock(locatedBlock.getBlock().getLocalBlock());
+        DatanodeStorageInfo[] storagesItr = bm.getStoragesTx(locatedBlock.getBlock().getLocalBlock(), dnm);
 
-        DatanodeStorageInfo[] storagesItr = blockInfo.getStorages(dnm);
-
-        DatanodeStorageInfo info = storagesItr[0]; // TODO: GABRIEL - test
+        DatanodeStorageInfo info = storagesItr[0];
         assertEquals(StorageType.PROVIDED, info.getStorageType());
         DatanodeDescriptor dnDesc = info.getDatanodeDescriptor();
         // check the locations that are returned by FSCK have the right name
@@ -361,10 +359,11 @@ public class ITestProvidedImplementation {
             + PATH_SEPARATOR_STR + ProvidedStorageMap.ProvidedDescriptor.NAME,
             NodeBase.getPath(dnDesc));
         // no DatanodeStorageInfos should remain
-        assertFalse(storagesItr[1] == null);  // TODO: GABRIEL - test
+        assertFalse(storagesItr.length > 1);
       }
     }
   }
+
 
   // TODO: GABRIEL - Fails when hop_gabriel.hdfs_replicas.storage_id = -1 and not 1
   @Test()
