@@ -933,7 +933,7 @@ public class BlockManager {
           " but corrupt replicas map has " + numCorruptReplicas);
     }
 
-    final int numNodes = blocksMap.numNodes(blk); // TODO: GABRIEL - !!! does not find any replicas. numNodes = 0 causes block to be corrupt
+    final int numNodes = blocksMap.numNodes(blk);
     final boolean isCorrupt = numCorruptNodes == numNodes;
     final int numMachines = isCorrupt ? numNodes : numNodes - numCorruptNodes;
     final DatanodeStorageInfo[] storages = new DatanodeStorageInfo[numMachines];

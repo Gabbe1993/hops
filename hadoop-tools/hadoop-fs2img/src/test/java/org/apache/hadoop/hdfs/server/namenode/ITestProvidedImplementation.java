@@ -365,7 +365,6 @@ public class ITestProvidedImplementation {
   }
 
 
-  // TODO: GABRIEL - Fails when hop_gabriel.hdfs_replicas.storage_id = -1 and not 1
   @Test()
   public void testDefaultReplication() throws Exception {
     int targetReplication = 2;
@@ -568,7 +567,7 @@ public class ITestProvidedImplementation {
         defaultReplication);
   }
 
-  @Test(timeout=30000)
+  @Test()
   public void testProvidedDatanodeFailures() throws Exception {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
             FixedBlockResolver.class);
@@ -628,7 +627,7 @@ public class ITestProvidedImplementation {
       // restart the provided datanode
       cluster.restartDataNode(providedDNProperties1, true);
       cluster.waitActive();
-
+      Thread.sleep(10000); // wait for block report
       assertEquals(1, providedDNInfo.getBlockReportCount());
 
       // should find the block on the 1st provided datanode now
@@ -733,7 +732,7 @@ public class ITestProvidedImplementation {
     assertEquals(clusterID, nn.getNamesystem().getClusterId());
   }
 
-  @Test(timeout=30000)
+  @Test()
   public void testNumberOfProvidedLocations() throws Exception {
     // set default replication to 4
     conf.setInt(DFSConfigKeys.DFS_REPLICATION_KEY, 4);
@@ -756,7 +755,7 @@ public class ITestProvidedImplementation {
       // make NameNode detect that datanode is down
       BlockManagerTestUtil.noticeDeadDatanode(cluster.getNameNode(),
           dn.getDatanodeId().getXferAddr());
-
+      Thread.sleep(10000);
       expectedLocations = 4 - i;
       for (int j = 0; j < numFiles; j++) {
         verifyFileLocation(j, expectedLocations);
