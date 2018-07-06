@@ -21,13 +21,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
-import io.hops.metadata.HdfsStorageFactory;
-import io.hops.metadata.adaptor.BlockInfoDALAdaptor;
-import io.hops.metadata.adaptor.INodeDALAdaptor;
-import io.hops.metadata.hdfs.dal.BlockInfoDataAccess;
-import io.hops.metadata.hdfs.dal.INodeDataAccess;
-import io.hops.transaction.handler.HDFSOperationType;
-import io.hops.transaction.handler.LightWeightRequestHandler;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -161,7 +154,7 @@ public class FileSystemImage implements Tool {
       }
       w.close();
       w.persistBlocks(blocks);
-      w.persistInodes(inodes);
+      w.persistInodesAndUsers(inodes);
     } catch (IOException e) {
       e.printStackTrace();
     }

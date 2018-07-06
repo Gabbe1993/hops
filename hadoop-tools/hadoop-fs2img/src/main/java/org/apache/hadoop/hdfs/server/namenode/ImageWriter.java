@@ -18,30 +18,35 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import io.hops.metadata.HdfsStorageFactory;
-import io.hops.metadata.adaptor.BlockInfoDALAdaptor;
-import io.hops.metadata.adaptor.INodeDALAdaptor;
-import io.hops.metadata.hdfs.dal.BlockInfoDataAccess;
-import io.hops.metadata.hdfs.dal.INodeDataAccess;
+import io.hops.metadata.hdfs.dal.*;
+import io.hops.metadata.hdfs.entity.Group;
+import io.hops.metadata.hdfs.entity.User;
 import io.hops.transaction.handler.HDFSOperationType;
 import io.hops.transaction.handler.LightWeightRequestHandler;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.apache.hadoop.hdfs.server.common.FileRegion;
-import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
-import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.mortbay.log.Log;
 
-import java.io.*;
-import java.util.*;
+import java.io.Closeable;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.hadoop.hdfs.server.namenode.TreePath.DEFAULT_NAMESPACE_QUOTA;
+import static org.apache.hadoop.hdfs.server.namenode.TreePath.DEFAULT_STORAGE_SPACE_QUOTA;
 
 /**
  * Utility crawling an existing hierarchical FileSystem and emitting
@@ -72,7 +77,6 @@ public class ImageWriter implements Closeable {
 
   @SuppressWarnings("unchecked")
   public ImageWriter(Options opts) throws IOException {
-    // GABRIEL - Do we need to create NNStorage and set NameSpaceInfo?
     String blockPoolID = opts.blockPoolID;
 
     startBlock = opts.startBlock;
@@ -100,45 +104,94 @@ public class ImageWriter implements Closeable {
       e.accept(id);
       assert e.getId() < curInode.get();
       INode n = e.toINode(ugis, blockIds, aliasMapWriter);
-
-      n.setParentIdNoPersistance(e.getParentId()); // GABRIEL - is parent id enough or do we need to set parent inode?
+      n.setParentIdNoPersistance(e.getParentId());
       return n;
     } else {
       e.accept(1);
-      return null;
+      INode n = e.createRootDir(ugis);
+      n.setParentIdNoPersistance(0);
+      return n;
     }
   }
 
-  void persistInodes(List<INode> inodes) throws IOException {
-    Log.info("About to persist " + inodes.size() + " inodes...");
+
+  void persistInodesAndUsers(List<INode> inodes) throws IOException {
     new LightWeightRequestHandler(HDFSOperationType.ADD_INODE) {
       @Override
       public Object performTask() throws IOException {
-        INodeDataAccess da = (INodeDataAccess) HdfsStorageFactory
+        UserDataAccess userDa = (UserDataAccess) HdfsStorageFactory
+                .getDataAccess(UserDataAccess.class);
+        GroupDataAccess groupDa = (GroupDataAccess) HdfsStorageFactory
+                .getDataAccess(GroupDataAccess.class);
+        UserGroupDataAccess userGroupDa = (UserGroupDataAccess) HdfsStorageFactory
+                .getDataAccess(UserGroupDataAccess.class);
+        INodeDataAccess iNodeDa = (INodeDataAccess) HdfsStorageFactory
                 .getDataAccess(INodeDataAccess.class);
+        INodeAttributesDataAccess iNodeAttributesDa = (INodeAttributesDataAccess) HdfsStorageFactory
+                .getDataAccess(INodeAttributesDataAccess.class);
 
-        da.prepare(null, inodes, null);
+        String username = "-1";
+        String groupname = "-1";
+        int userId = -1;
+        int grpId = -1;
+        List<INodeAttributes> iNodeAttributes = new ArrayList<>();
+        for(INode n : inodes) {
+          boolean addUserGroup = false;
+          // check to not do unnecessary transactions
+          if(!username.equals(n.getUserName())) {
+            username = n.getUserName();
+            userDa.addUser(username);
+            User user = (User) userDa.getUser(username);
+            userId = user.getId();
+            addUserGroup = true;
+
+            Log.info("Persisted user: {}, {} ", user.getName(), user.getId());
+          }
+          n.setUserIDNoPersistance(userId);
+          if(!groupname.equals(n.getGroupName())) {
+            groupname = n.getGroupName();
+            groupDa.addGroup(groupname);
+            Group group = (Group) groupDa.getGroup(groupname);
+            grpId = group.getId();
+            addUserGroup = true;
+
+            Log.info("Persisted group: {}, {}", group.getName(), group.getId());
+          }
+          n.setGroupIDNoPersistance(grpId);
+          if(n instanceof INodeDirectoryWithQuota) {
+            iNodeAttributes.add(new INodeAttributes(n.getId(), DEFAULT_NAMESPACE_QUOTA,
+                    0L, DEFAULT_STORAGE_SPACE_QUOTA, 0L));
+          }
+          if(addUserGroup) {
+            connector.flush();
+            userGroupDa.addUserToGroup(n.getUserID(), n.getGroupID());
+            Log.info("Persisted usergroup: {}, {} ", n.getUserID(), n.getGroupID());
+          }
+        }
+        iNodeAttributesDa.prepare(iNodeAttributes, null);
+        Log.info("Persisted {} inodes attributes", iNodeAttributes.size());
+
+        iNodeDa.prepare(null, inodes, null);
+        Log.info("Persisted {} inodes", inodes.size());
 
         return null;
       }
     }.handle();
-    Log.info("Persisted inodes");
   }
 
   void persistBlocks(List<BlockInfo> blocks) throws IOException {
-    Log.info("About to persist " + blocks.size() + " blocks...");
-    new LightWeightRequestHandler(HDFSOperationType.ADD_SAFE_BLOCKS) {
-      @Override
+
+    new LightWeightRequestHandler(HDFSOperationType.ADD_SAFE_BLOCKS) {      @Override
       public Object performTask() throws IOException {
         BlockInfoDataAccess da = (BlockInfoDataAccess) HdfsStorageFactory
                 .getDataAccess(BlockInfoDataAccess.class);
 
-        da.prepare(null, blocks, null); // throws java.lang.ClassCastException: io.hops.metadata.hdfs.entity.BlockInfo cannot be cast to org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo
+        da.prepare(null, blocks, null);
+        Log.info("Persisted " + blocks.size() + " blocks");
 
         return null;
       }
     }.handle();
-    Log.info("Persisted blocks");
   }
 
   @Override

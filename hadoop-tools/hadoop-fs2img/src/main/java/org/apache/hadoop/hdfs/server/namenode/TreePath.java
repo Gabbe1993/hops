@@ -104,6 +104,26 @@ public class TreePath {
     }
   }
 
+
+  INodeDirectory createRootDir(UGIResolver ugi) throws IOException {
+    final FileStatus s = getFileStatus();
+    ugi.addUser(s.getOwner());
+    ugi.addGroup(s.getGroup());
+
+    INodeDirectoryWithQuota inodeDir = new INodeDirectoryWithQuota(
+            "",
+            new PermissionStatus(ugi.user(s), ugi.group(s), ugi.permission(s)));
+
+    inodeDir.setModificationTimeNoPersistance(s.getModificationTime());
+    inodeDir.setAccessTimeNoPersistance(s.getAccessTime());
+    inodeDir.setUserNameNoPersistance(ugi.user(s));
+    inodeDir.setGroupNameNoPersistance(ugi.group(s));
+    inodeDir.setPartitionIdNoPersistance(0);
+    inodeDir.setIdNoPersistance(1);
+
+    return inodeDir;
+  }
+
   @Override
   public boolean equals(Object other) {
     if (!(other instanceof TreePath)) {
@@ -166,24 +186,25 @@ public class TreePath {
       block.setBlockIndexNoPersistance(blkIndex++);
       off += block.getNumBytes();
     }
+    BlockInfo[] infos = new BlockInfo[blocks.size()];
+    inode.setSizeNoPersistence(INodeFile.computeFileSize(false, blocks.toArray(infos)));
 
     return inode;
   }
 
-  private void setProperties(INode inode, FileStatus s, UGIResolver ugi, short myDepth) {
+  private void setProperties(INode inode, FileStatus s, UGIResolver ugi, short myDepth) throws IOException {
     inode.setIdNoPersistance(id);
     inode.setLocalNameNoPersistance(string2Bytes(s.getPath().getName()));
-    inode.setUserIDNoPersistance(ugi.getUserId(ugi.user(s)));
-    inode.setGroupIDNoPersistance(ugi.getGroupId(ugi.group(s)));
+    inode.setUserNameNoPersistance(ugi.user(s));
+    inode.setGroupNameNoPersistance(ugi.group(s));
     inode.setPartitionIdNoPersistance(INode.calculatePartitionId(getParentId(), s.getPath().getName(), myDepth));
   }
 
-
+  // GABRIEL - we are never calling this
   INodeDirectoryWithQuota toDirectory(UGIResolver ugi) throws IOException {
     final FileStatus s = getFileStatus();
     ugi.addUser(s.getOwner());
     ugi.addGroup(s.getGroup());
-
     INodeDirectoryWithQuota inodeDir = new INodeDirectoryWithQuota(
             s.getPath().getName(),
             new PermissionStatus(ugi.user(s), ugi.group(s), ugi.permission(s)));

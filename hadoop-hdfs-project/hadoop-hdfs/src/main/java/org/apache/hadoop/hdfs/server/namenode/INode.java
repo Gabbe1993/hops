@@ -268,6 +268,16 @@ public abstract class INode implements Comparable<byte[]> {
     this.userId = UsersGroups.getUserID(user);
   }
 
+
+  public void setUserNameNoPersistance(String userName) {
+    this.userName = userName;
+  }
+
+
+  public void setGroupNameNoPersistance(String groupName) {
+    this.groupName = groupName;
+  }
+
   /**
    * Get group name
    */
@@ -424,13 +434,14 @@ public abstract class INode implements Comparable<byte[]> {
   @Override
   public String toString() {
     try {
-      return "\"" + getFullPathName() + "\":" + getUserName() + ":" +
+      return "\""
+              + getFullPathName() + "\":" + getUserName() + ":" +
           getGroupName() + ":" + (isDirectory() ? "d" : "-") +
           getFsPermission();
     } catch (IOException ex) {
       Logger.getLogger(INode.class.getName()).log(Level.SEVERE, null, ex);
     }
-    return null;
+    return "";
   }
 
   /**

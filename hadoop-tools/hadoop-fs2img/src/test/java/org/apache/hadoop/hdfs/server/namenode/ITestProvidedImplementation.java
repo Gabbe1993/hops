@@ -18,7 +18,6 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import io.hops.metadata.HdfsStorageFactory;
-import io.hops.transaction.EntityManager;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
@@ -209,7 +208,7 @@ public class ITestProvidedImplementation {
       w.close();
 
       w.persistBlocks(blocks); // make sure to start cluster before persisting
-      w.persistInodes(inodes);
+      w.persistInodesAndUsers(inodes);
       return w;
     } catch (IOException e) {
       e.printStackTrace();
@@ -503,7 +502,7 @@ public class ITestProvidedImplementation {
     assertEquals(expectedBlocks, locatedBlocks.getLocatedBlocks().size());
     DatanodeInfo[] locations =
         locatedBlocks.getLocatedBlocks().get(0).getLocations();
-    assertEquals(expectedLocations, locations.length); // TODO: GABRIEL - locations.length does not match most of the time
+    assertEquals(expectedLocations, locations.length);
     checkUniqueness(locations);
     return locations;
   }
@@ -873,6 +872,10 @@ public class ITestProvidedImplementation {
     cluster.triggerHeartbeats();
     verifyFileLocation(fileIndex, 3);
 
+    // start maintenance for 2nd DN; still get 3 replicas.
+    //startMaintenance(cluster.getNamesystem(), dnm, 1);
+    //verifyFileLocation(fileIndex, 3);
+
     DataNode dn1 = cluster.getDataNodes().get(0);
     DataNode dn2 = cluster.getDataNodes().get(1);
 
@@ -892,6 +895,10 @@ public class ITestProvidedImplementation {
     // 2 valid locations will be found as blocks on nodes that die during
     // maintenance are not marked for removal.
     verifyFileLocation(fileIndex, 2);
+
+    // stop the maintenance; get only 1 replicas
+    //stopMaintenance(cluster.getNamesystem(), dnm, 0);
+    //verifyFileLocation(fileIndex, 1);
 
     // restart the stopped DN.
     cluster.restartDataNode(dn1Properties, true);

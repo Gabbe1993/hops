@@ -229,7 +229,7 @@ public class INodeDirectoryWithQuota extends INodeDirectory {
     return EntityManager.find(INodeAttributes.Finder.ByINodeId, id);
   }
   
-  private void createINodeAttributes(Long nsQuota, Long nsCount, Long dsQuota,
+  public void createINodeAttributes(Long nsQuota, Long nsCount, Long dsQuota,
       Long diskspace) throws StorageException, TransactionContextException {
     INodeAttributes attr =
         new INodeAttributes(id, nsQuota, nsCount, dsQuota, diskspace);

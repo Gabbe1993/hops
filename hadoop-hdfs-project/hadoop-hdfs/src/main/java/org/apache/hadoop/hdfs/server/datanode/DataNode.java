@@ -1792,7 +1792,10 @@ public class DataNode extends Configured
     for (StorageLocation location : dataDirs) {
       final URI uri = location.getUri();
       try {
-        dataNodeDiskChecker.checkDir(localFS, new Path(uri));
+        // skip check for provided directories, we assume they are healthy
+        if(!location.getStorageType().equals(StorageType.PROVIDED)) {
+          dataNodeDiskChecker.checkDir(localFS, new Path(uri));
+        }
         locations.add(location);
       } catch (IOException ioe) {
         LOG.warn("Invalid " + DFS_DATANODE_DATA_DIR_KEY + " uri = "
