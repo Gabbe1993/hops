@@ -518,23 +518,17 @@ public class DatanodeDescriptor extends DatanodeInfo {
       DatanodeStorageInfo storage = storageMap.get(s.getStorageID());
       if (null == storage) {
         LOG.info("Adding new storage ID {" + s.getStorageID() + "} for DN { " + getXferAddr() + "}");
-       /* DFSTopologyNodeImpl parent = null;
-        if (getParent() instanceof DFSTopologyNodeImpl) {
-          parent = (DFSTopologyNodeImpl) getParent();
-        }
-        StorageType type = s.getStorageType();
-        if (!hasStorageType(type) && parent != null) {
-          // we are about to add a type this node currently does not have,
-          // inform the parent that a new type is added to this datanode
-          parent.childAddStorage(getName(), type); // GABRIEL - do we need to add a child?
-        }*/
         storageMap.put(s.getStorageID(), s);
+        try {
+          globalStorageMap.updateStorage(s);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
       } else {
         assert storage == s : "found " + storage + " expected " + s;
       }
     }
   }
-
   /**
    * Remove stale storages from storageMap. We must not remove any storages
    * as long as they have associated block replicas.

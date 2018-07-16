@@ -114,11 +114,13 @@ public class DataStorage extends Storage {
     final String oldStorageID = sd.getStorageUuid();
     if (sd.getStorageLocation() != null &&
             sd.getStorageLocation().getStorageType() == StorageType.PROVIDED) {
-      // Only one provided storage id is supported.
-      // TODO support multiple provided storage ids
-      sd.setStorageUuid(conf.get(DFSConfigKeys.DFS_PROVIDER_STORAGEUUID,
-              DFSConfigKeys.DFS_PROVIDER_STORAGEUUID_DEFAULT));
-      return false;
+
+      // GABRIEL - We only support one PROVIDED storage at the moment.
+      // Since the storage ID is identical creating multiple will override eachother in the db.
+      String storageId = conf.get(DFSConfigKeys.DFS_PROVIDER_STORAGEUUID,
+              DFSConfigKeys.DFS_PROVIDER_STORAGEUUID_DEFAULT);
+      sd.setStorageUuid(storageId);
+      return true;
     }
     if (oldStorageID == null || regenerateStorageIds) {
       sd.setStorageUuid(DatanodeStorage.generateUuid());

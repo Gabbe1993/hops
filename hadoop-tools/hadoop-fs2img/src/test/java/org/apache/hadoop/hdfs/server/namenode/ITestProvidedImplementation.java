@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.server.namenode;
 
 import io.hops.metadata.HdfsStorageFactory;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.logging.impl.Log4JLogger;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.FileSystem;
@@ -40,10 +41,8 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.net.NodeBase;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.apache.log4j.Level;
+import org.junit.*;
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,8 +83,7 @@ public class ITestProvidedImplementation {
   private final String fileSuffix = ".dat";
   private final int baseFileLen = 1024;
   private long providedDataSize = 0;
-  private String bpid = "BP-2070509985-10.112.11.31-1530188246938"; // TODO: GABRIEL - This NEEDS to match bpid from Hops. Should be retrived from db. Now has to be changed with each new bpid!
-
+  private String bpid = "";
   private Configuration conf;
   private MiniDFSCluster cluster;
   private ArrayList<INode> inodes;
@@ -96,6 +94,7 @@ public class ITestProvidedImplementation {
     if (fBASE.exists() && !FileUtil.fullyDelete(fBASE)) {
       throw new IOException("Could not fully delete " + fBASE);
     }
+    ((Log4JLogger) NameNode.blockStateChangeLog).getLogger().setLevel(Level.ALL);
     long seed = r.nextLong();
     r.setSeed(seed);
     System.out.println(name.getMethodName() + " seed: " + seed);
@@ -105,6 +104,7 @@ public class ITestProvidedImplementation {
 
     conf.set(DFSConfigKeys.DFS_PROVIDER_STORAGEUUID,
         DFSConfigKeys.DFS_PROVIDER_STORAGEUUID_DEFAULT);
+    // GABRIEL - setting DFS_NAMENODE_PROVIDED_ENABLED to true will create a default PROVIDED storage and datanode
     conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_PROVIDED_ENABLED, true);
 
     conf.setClass(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_CLASS,
@@ -292,6 +292,7 @@ public class ITestProvidedImplementation {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     int numDatanodes = 10;
+    // 1 datanode PROVIDED, 9 DISK
     startCluster(nnDirPath, numDatanodes,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK}, null,
         false, writer);
@@ -378,7 +379,7 @@ public class ITestProvidedImplementation {
             {StorageType.DISK}},
         false, writer);
     // wait for the replication to finish
-    Thread.sleep(200000);
+    Thread.sleep(50000);
 
     FileSystem fs = cluster.getFileSystem();
     int count = 0;
@@ -502,7 +503,7 @@ public class ITestProvidedImplementation {
     assertEquals(expectedBlocks, locatedBlocks.getLocatedBlocks().size());
     DatanodeInfo[] locations =
         locatedBlocks.getLocatedBlocks().get(0).getLocations();
-    assertEquals(expectedLocations, locations.length);
+    assertEquals(expectedLocations, locations.length); // TODO: GABRIEL - The replication is correct but the locations and db is not updated
     checkUniqueness(locations);
     return locations;
   }
@@ -524,46 +525,63 @@ public class ITestProvidedImplementation {
    * Tests setting replication of provided files.
    * @throws Exception
    */
-  @Test()
+  @Test(timeout = 100000)
   public void testSetReplicationForProvidedFiles() throws Exception {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
-    // 10 Datanodes with both DISK and PROVIDED storage
     startCluster(nnDirPath, 10,
-        new StorageType[]{
-            StorageType.PROVIDED, StorageType.DISK},
-        null,
-        false, writer);
+            new StorageType[]{
+                    StorageType.PROVIDED, StorageType.DISK},
+            null,
+            false, writer);
     setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
   }
 
+  @Test//(timeout = 100000)
+  public void testSimpleProvidedReplication() throws Exception {
+    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
+            FixedBlockResolver.class);
+    // GABRIEL - Replication does not work on more than 1 PROVIDED datanode,
+    // we need to have exactly one  {StorageType.PROVIDED, StorageType.DISK} datanode
+    startCluster(nnDirPath, 3, null,
+            new StorageType[][]{
+                    {StorageType.PROVIDED, StorageType.DISK},
+                    {StorageType.DISK},
+                    {StorageType.DISK}},
+            false, writer);
+    setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
+  }
   private void setAndUnsetReplication(String filename) throws Exception {
     Path file = new Path(filename);
     FileSystem fs = cluster.getFileSystem();
-    // set the replication to 4, and test that the file has
+    // set the replication, and test that the file has
     // the required replication.
-    short newReplication = 4;
+    short newReplication = 3;
     LOG.info("Setting replication of file {} to {}", filename, newReplication);
     fs.setReplication(file, newReplication);
+
     ExtendedBlock b = DFSTestUtil.getFirstBlock(fs, file);
-    DFSTestUtil.waitForReplication(cluster,
-            b, newReplication, 10000, 0);
+    // The replicas should be moved to the /default rack.
+    DFSTestUtil.waitForReplication(cluster, b, newReplication);
     DFSClient client = new DFSClient(new InetSocketAddress("localhost",
         cluster.getNameNodePort()), cluster.getConfiguration(0));
+    // wait for replica to get deleted
+    System.out.println("sleeping for replica to get deleted...");
+    Thread.sleep(60000);
     getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
 
-    // set the replication back to 1
+    // set the replication back
     newReplication = 1;
-    LOG.info("Setting replication of file {} back to {}",
+    LOG.info("Setting replication of file {} to {}",
         filename, newReplication);
     fs.setReplication(file, newReplication);
-    // defaultReplication number of replicas should be returned
-    int defaultReplication = conf.getInt(DFSConfigKeys.DFS_REPLICATION_KEY,
-        DFSConfigKeys.DFS_REPLICATION_DEFAULT);
-    DFSTestUtil.waitForReplication(cluster,
-        b, (short) defaultReplication, 10000, 0);
+    NameNodeAdapter.setReplication(cluster.getNamesystem(), filename, newReplication);
+    // We will have one excess replica that should be removed
+    DFSTestUtil.waitForReplication(cluster, b, newReplication);
+    System.out.println("sleeping for replica to get deleted...");
+    Thread.sleep(60000);
     getAndCheckBlockLocations(client, filename, baseFileLen, 1,
-        defaultReplication);
+            newReplication);
   }
 
   @Test()
@@ -717,6 +735,7 @@ public class ITestProvidedImplementation {
   }
 
   @Test(timeout=30000)
+  @Ignore // not applicable to Hops, clusterID from ndb
   public void testSetClusterID() throws Exception {
     String clusterID = "PROVIDED-CLUSTER";
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
@@ -936,6 +955,8 @@ public class ITestProvidedImplementation {
           new StorageType[]{StorageType.PROVIDED, StorageType.DISK},
           null, false, racks, writer);
       verifyFileSystemContents();
+      // wait for the replication to finish
+      Thread.sleep(100000);
       setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
       cluster.shutdown();
     }

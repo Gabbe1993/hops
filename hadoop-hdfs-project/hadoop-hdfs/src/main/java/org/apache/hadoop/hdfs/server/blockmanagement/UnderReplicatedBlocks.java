@@ -34,6 +34,7 @@ import io.hops.transaction.lock.TransactionLockTypes;
 import io.hops.transaction.lock.TransactionLocks;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.mortbay.log.Log;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -239,14 +240,14 @@ class UnderReplicatedBlocks implements Iterable<Block> {
     int priLevel = getPriority(block, curReplicas, decomissionedReplicas,
         expectedReplicas);
     if (priLevel != LEVEL && add(block, priLevel)) {
-      if (NameNode.blockStateChangeLog.isDebugEnabled()) {
-        NameNode.blockStateChangeLog.debug(
+      //if (NameNode.blockStateChangeLog.isDebugEnabled()) {
+        Log.info(
             "BLOCK* NameSystem.UnderReplicationBlock.add:" + block +
                 " has only " + curReplicas + " replicas and need " +
                 expectedReplicas +
                 " replicas so is added to neededReplications" +
                 " at priority level " + priLevel);
-      }
+      //}
       return true;
     }
     return false;
@@ -286,12 +287,12 @@ class UnderReplicatedBlocks implements Iterable<Block> {
       throws StorageException, TransactionContextException {
     UnderReplicatedBlock urb = getUnderReplicatedBlock(block);
     if (priLevel >= 0 && priLevel < LEVEL && remove(urb)) {
-      if (NameNode.blockStateChangeLog.isDebugEnabled()) {
-        NameNode.blockStateChangeLog.debug(
+      //if (NameNode.blockStateChangeLog.isDebugEnabled()) {
+        Log.info(
             "BLOCK* NameSystem.UnderReplicationBlock.remove: " +
                 "Removing block " + block + " from priority queue " +
                 urb.getLevel());
-      }
+      //}
       return true;
     }
     return false;
@@ -329,8 +330,8 @@ class UnderReplicatedBlocks implements Iterable<Block> {
         curExpectedReplicas);
     int oldPri = getPriority(block, oldReplicas, decommissionedReplicas,
         oldExpectedReplicas);
-    if (NameNode.stateChangeLog.isDebugEnabled()) {
-      NameNode.stateChangeLog.debug("UnderReplicationBlocks.update " +
+    //if (NameNode.stateChangeLog.isDebugEnabled()) {
+      Log.info("UnderReplicationBlocks.update " +
           block +
           " curReplicas " + curReplicas +
           " curExpectedReplicas " + curExpectedReplicas +
@@ -338,19 +339,19 @@ class UnderReplicatedBlocks implements Iterable<Block> {
           " oldExpectedReplicas  " + oldExpectedReplicas +
           " curPri  " + curPri +
           " oldPri  " + oldPri);
-    }
+    //}
     if (oldPri != LEVEL && oldPri != curPri) {
       remove(block, oldPri);
     }
     if (curPri != LEVEL && add(block, curPri)) {
-      if (NameNode.blockStateChangeLog.isDebugEnabled()) {
-        NameNode.blockStateChangeLog.debug(
+      //if (NameNode.blockStateChangeLog.isDebugEnabled()) {
+        Log.info(
             "BLOCK* NameSystem.UnderReplicationBlock.update:" + block +
                 " has only " + curReplicas + " replicas and needs " +
                 curExpectedReplicas +
                 " replicas so is added to neededReplications" +
                 " at priority level " + curPri);
-      }
+     // }
     }
   }
   
@@ -402,7 +403,7 @@ class UnderReplicatedBlocks implements Iterable<Block> {
       blockCount += blks.size();
       replIndex += blks.size();
       
-      if (count(priority) <= remainingblksToProcess && priority == LEVEL - 1) {
+      if (priority == LEVEL - 1 && count(priority) <= replIndex) {
         // reset all priorities replication index to 0 because there is no
         // recently added blocks in any list.
         for (int i = 0; i < LEVEL; i++) {

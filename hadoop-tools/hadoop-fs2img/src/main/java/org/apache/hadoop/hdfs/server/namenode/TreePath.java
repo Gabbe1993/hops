@@ -179,11 +179,11 @@ public class TreePath {
     int blkIndex = 0;
     for (BlockInfo block : blk.resolve(s)) {
       inode.setHasBlocksNoPersistance(true);
-      blocks.add(block);
       writeBlock(block.getBlockId(), off, block.getNumBytes(),
               block.getGenerationStamp(), pathHandle, out);
       block.setINodeIdNoPersistance(id);
       block.setBlockIndexNoPersistance(blkIndex++);
+      blocks.add(block);
       off += block.getNumBytes();
     }
     BlockInfo[] infos = new BlockInfo[blocks.size()];

@@ -130,6 +130,7 @@ public class HdfsConstants {
   7	        Hot (default)	DISK: n	                   <none>	            ARCHIVE
   5	        Warm	        DISK: 1, ARCHIVE: n-1    	 ARCHIVE, DISK	    ARCHIVE, DISK
   2	        Cold	        ARCHIVE: n	               <none>	            <none>
+  1         Provided      PROVIDED: n                DISK               DISK
   */
 
   public static final String ALLSSD_STORAGE_POLICY_NAME = "ALL_SSD";

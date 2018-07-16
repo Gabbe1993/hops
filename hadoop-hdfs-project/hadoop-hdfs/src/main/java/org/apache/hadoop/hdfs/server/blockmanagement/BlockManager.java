@@ -1896,7 +1896,7 @@ public class BlockManager {
 
     Collection<DatanodeDescriptor> nodesCorrupt = corruptReplicas.getNodes(block);
     for(DatanodeStorageInfo storage : block.getStorages(datanodeManager)) {
-      final DatanodeDescriptor node = storage.getDatanodeDescriptor();
+      final DatanodeDescriptor node = getDatanodeDescriptorFromStorage(storage);
       if ((nodesCorrupt != null) && (nodesCorrupt.contains(node))) {
         corrupt++;
       } else if (node.isDecommissionInProgress() || node.isDecommissioned()) {
@@ -1904,6 +1904,10 @@ public class BlockManager {
       } else if (excessReplicateMap.contains(storage, block)) {
           excess++;
       } else {
+        if (storage.getStorageType() == StorageType.PROVIDED) {
+          storage = new DatanodeStorageInfo(node, storage.getStorageID(),
+                  storage.getStorageType(), storage.getState());
+        }
         nodesContainingLiveReplicas.add(storage);
         live++;
       }
@@ -2062,15 +2066,13 @@ public class BlockManager {
     // that we receive while still in startup phase.
     // Register DN with provided storage, not with storage owned by DN
     // DN should still have a ref to the DNStorageInfo.
-    DatanodeStorageInfo storageInfo = providedStorageMap.getStorage(node, storage); // TODO: GABRIEL - fails when returns sid = -1
+    DatanodeStorageInfo storageInfo = providedStorageMap.getStorage(node, storage);
 
     if (storageInfo == null) {
       // We handle this for backwards compatibility.
       storageInfo = node.updateStorage(storage);
-      // providedStorageMap.updateStorage(node, storage);
+      //providedStorageMap.updateStorage(node, storage);
     }
-    // GABRIEL - at this point storageInfo.sid should not be -1
-
     // To minimize startup time, we discard any second (or later) block reports
     // that we receive while still in startup phase.
     if (namesystem.isInStartupSafeMode() && storageInfo.getBlockReportCount() > 0) {
@@ -2199,15 +2201,14 @@ public class BlockManager {
     Collection<StatefulBlockInfo> toUC = Collections.newSetFromMap(mapToUC);
 
     final boolean firstBlockReport =
-            (namesystem.isInStartupSafeMode() && storage.getBlockReportCount() == 0)
-            || storage.getStorageType().equals(StorageType.PROVIDED); // GABRIEL - should always be firstBlockReport if provided?
+            (namesystem.isInStartupSafeMode() && storage.getBlockReportCount() == 0); // GABRIEL - should always be firstBlockReport if provided?
     ReportStatistics reportStatistics = reportDiff(storage, report, toAdd, toRemove, toInvalidate, toCorrupt,
         toUC, firstBlockReport);
 
     // Process the blocks on each queue
     for (StatefulBlockInfo b : toUC) {
-        if (firstBlockReport) {
-      addStoredBlockUnderConstructionImmediateTx(b.storedBlock, storage, b.reportedState);
+      if (firstBlockReport) {
+        addStoredBlockUnderConstructionImmediateTx(b.storedBlock, storage, b.reportedState);
      } else {
         addStoredBlockUnderConstructionTx(b.storedBlock, storage, b.reportedState);
       }
@@ -2217,7 +2218,7 @@ public class BlockManager {
     final List<Callable<Object>> addTasks = new ArrayList<>();
     for (final BlockInfo b : toAdd) {
       if (firstBlockReport) {
-        addStoredBlockImmediateTx(b, storage);  // TODO: GABRIEL: exception for provided storage reports?
+        addStoredBlockImmediateTx(b, storage);
       } else {
         addTasks.add(new Callable<Object>() {
           @Override
@@ -2252,7 +2253,7 @@ public class BlockManager {
     }
     addToInvalidates(toInvalidate, storage);
 
-    for (Long b : toRemove) { // GABRIEL : all provided blocks gets added for removal
+    for (Long b : toRemove) {
       removeStoredBlockTx(b, storage.getDatanodeDescriptor());
     }
     return reportStatistics;
@@ -2357,7 +2358,7 @@ public class BlockManager {
         .getAllMachineReplicasInBuckets(matchingResult.mismatchedBuckets, storage.getSid());
 
 
-    final Set<Long> allMismatchedBlocksOnServer = mismatchedBlocksAndInodes.keySet(); // GABRIEL - all provided blocks are added here
+    final Set<Long> allMismatchedBlocksOnServer = mismatchedBlocksAndInodes.keySet();
     aggregatedSafeBlocks.addAll(allMismatchedBlocksOnServer);
 
     for (final int bucketId : matchingResult.mismatchedBuckets){

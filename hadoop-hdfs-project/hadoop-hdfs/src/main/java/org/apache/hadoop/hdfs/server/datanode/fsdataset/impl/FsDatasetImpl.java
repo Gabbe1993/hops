@@ -813,7 +813,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   public synchronized ReplicaInPipeline createTemporary(StorageType storageType, ExtendedBlock b)
       throws IOException {
     ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getBlockId());
-    if (replicaInfo != null) {
+    // If current block is PROVIDED, ignore the replica.
+    if (replicaInfo != null && !isReplicaProvided(replicaInfo)) {
       throw new ReplicaAlreadyExistsException("Block " + b +
           " already exists in state " + replicaInfo.getState() +
           " and thus cannot be created.");

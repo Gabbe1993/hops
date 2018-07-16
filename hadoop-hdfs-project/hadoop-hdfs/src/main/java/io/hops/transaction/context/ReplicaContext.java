@@ -42,10 +42,11 @@ public class ReplicaContext
   public void update(Replica replica)
       throws TransactionContextException {
     super.update(replica);
-    if(isLogDebugEnabled()) {
+    //if(isLogDebugEnabled()) {
+    System.out.println("UPDATE REPLICA =  " + replica);
       log("updated-replica", "bid", replica.getBlockId(), "sid",
               replica.getStorageId());
-    }
+    //}
   }
 
   @Override

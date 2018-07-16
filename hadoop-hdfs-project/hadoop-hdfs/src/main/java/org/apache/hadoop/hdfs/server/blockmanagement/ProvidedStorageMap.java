@@ -36,7 +36,6 @@ import org.apache.hadoop.hdfs.server.protocol.BlockReportBlock;
 import org.apache.hadoop.hdfs.server.protocol.BlockReportBucket;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage.State;
-import org.apache.hadoop.hdfs.util.RwLock;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -89,7 +86,6 @@ public class ProvidedStorageMap {
       providedStorageInfo = null;
       return;
     }
-
     DatanodeStorage ds = new DatanodeStorage(
         storageId, State.NORMAL, StorageType.PROVIDED);
     providedDescriptor = new ProvidedDescriptor();
@@ -121,22 +117,23 @@ public class ProvidedStorageMap {
   DatanodeStorageInfo getStorage(DatanodeDescriptor dn, DatanodeStorage s)
       throws IOException {
     if (providedEnabled && storageId.equals(s.getStorageID())) {
-      if (StorageType.PROVIDED.equals(s.getStorageType())) {
-        if (providedStorageInfo.getState() == State.FAILED
-            && s.getState() == State.NORMAL) {
-          providedStorageInfo.setState(State.NORMAL);
-          LOG.info("Provided storage transitioning to state " + State.NORMAL);
-        }
-        if (dn.getStorageInfo(s.getStorageID()) == null) {
-          dn.injectStorage(providedStorageInfo);
-        }
+        if (StorageType.PROVIDED.equals(s.getStorageType())) {
+          if (providedStorageInfo.getState() == State.FAILED
+                  && s.getState() == State.NORMAL) {
+            providedStorageInfo.setState(State.NORMAL);
+            LOG.info("Provided storage transitioning to state " + State.NORMAL);
+          }
+          if (dn.getStorageInfo(s.getStorageID()) == null) {
+            dn.injectStorage(providedStorageInfo);
+          }
         processProvidedStorageReport();
         return providedDescriptor.getProvidedStorage(dn, s);
+        }
+        LOG.warn("Reserved storage {} reported as non-provided from {}", s, dn);
       }
-      LOG.warn("Reserved storage {} reported as non-provided from {}", s, dn);
-    }
-    return dn.getStorageInfo(s.getStorageID());
+      return dn.getStorageInfo(s.getStorageID());
   }
+
 
   private synchronized void processProvidedStorageReport()
       throws IOException {
@@ -184,16 +181,13 @@ public class ProvidedStorageMap {
     return providedStorageInfo.getCapacity();
   }
 
-  public void updateStorage(DatanodeDescriptor node, DatanodeStorage storage) throws IOException {
-    System.out.println("ProvidedStorageMap.updateStorage");
-    System.out.println("node = [" + node + "], storage = [" + storage + "]");
+  public void updateStorage(DatanodeDescriptor node, DatanodeStorage storage) {
     if (isProvidedStorage(storage.getStorageID())) {
       if (StorageType.PROVIDED.equals(storage.getStorageType())) {
         node.injectStorage(providedStorageInfo);
-        return;
       } else {
         LOG.warn("Reserved storage {} reported as non-provided from {}",
-            storage, node);
+                storage, node);
       }
     }
   }
@@ -279,12 +273,12 @@ public class ProvidedStorageMap {
           excludedUUids.add(dn.getDatanodeUuid());
         }
       }
-      return new LocatedBlock(eb,
-          locs.toArray(new DatanodeInfoWithStorage[locs.size()]),
-          sids.toArray(new String[sids.size()]),
-          types.toArray(new StorageType[types.size()]),
-          pos, isCorrupt, null);
-    }
+        return new LocatedBlock(eb,
+                locs.toArray(new DatanodeInfoWithStorage[locs.size()]),
+                sids.toArray(new String[sids.size()]),
+                types.toArray(new StorageType[types.size()]),
+                pos, isCorrupt, null);
+      }
 
     @Override
     LocatedBlocks build(DatanodeDescriptor client) {
@@ -319,18 +313,18 @@ public class ProvidedStorageMap {
             new DatanodeID(
             null,
             null,
-            UUID.randomUUID().toString(),
+            UUID.randomUUID().toString(), // this is a default created PROVIDED dn
             0,
             0,
-     //       0,
             0));
     }
 
+
     DatanodeStorageInfo getProvidedStorage(
         DatanodeDescriptor dn, DatanodeStorage s) {
-      LOG.info("Added to storage map: " + dn.getDatanodeUuid());
-      dns.put(dn.getDatanodeUuid(), dn);
-      dnR.add(dn);
+        LOG.info("Added to storage map: " + dn.getDatanodeUuid());
+        dns.put(dn.getDatanodeUuid(), dn);
+        dnR.add(dn);
       return storageMap.get(s.getStorageID());
     }
 
@@ -339,15 +333,11 @@ public class ProvidedStorageMap {
       DatanodeStorageInfo storage = new ProvidedDatanodeStorageInfo(this, ds);
       storage.setHeartbeatedSinceFailover(true);
       storageMap.put(storage.getStorageID(), storage);
-
-
-/*
-    try {
-        globalStorageMap.updateStorage(storage); // TODO: GABRIEL - update global storage map
+      try {
+        globalStorageMap.updateStorage(storage);
       } catch (IOException e) {
         e.printStackTrace();
       }
-*/
       return storage;
     }
 
@@ -389,18 +379,6 @@ public class ProvidedStorageMap {
       return null;
     }
 
-    DatanodeDescriptor chooseRandom(DatanodeStorageInfo... excludedStorages) {
-      Set<String> excludedNodes = new HashSet<>();
-      if (excludedStorages != null) {
-        for (int i = 0; i < excludedStorages.length; i++) {
-          DatanodeDescriptor dn = excludedStorages[i].getDatanodeDescriptor();
-          String uuid = dn.getDatanodeUuid();
-          excludedNodes.add(uuid);
-        }
-      }
-      return choose(null, excludedNodes);
-    }
-
     @Override
     void addBlockToBeReplicated(Block block, DatanodeStorageInfo[] targets) {
       // pick a random datanode, delegate to it
@@ -411,6 +389,18 @@ public class ProvidedStorageMap {
         LOG.error("Cannot find a source node to replicate block: "
             + block + " from");
       }
+    }
+
+    DatanodeDescriptor chooseRandom(DatanodeStorageInfo... excludedStorages) {
+      Set<String> excludedNodes = new HashSet<>();
+      if (excludedStorages != null) {
+        for (int i = 0; i < excludedStorages.length; i++) {
+          DatanodeDescriptor dn = excludedStorages[i].getDatanodeDescriptor();
+          String uuid = dn.getDatanodeUuid();
+          excludedNodes.add(uuid);
+        }
+      }
+      return choose(null, excludedNodes);
     }
 
     int remove(DatanodeDescriptor dnToRemove) {
@@ -425,6 +415,7 @@ public class ProvidedStorageMap {
       }
       return dns.size();
     }
+
 
     int activeProvidedDatanodes() {
       return dns.size();
@@ -454,6 +445,7 @@ public class ProvidedStorageMap {
     public String getName() {
       return NAME;
     }
+
   }
 
   /**
@@ -497,39 +489,6 @@ public class ProvidedStorageMap {
     }
   }
 
-
-  /**
-   * Used to emulate block reports for provided blocks.
-   */
-  static class ProvidedBlockList extends BlockReport {
-
-    HdfsConfiguration conf = new HdfsConfiguration();
-
-    Builder builder = builder(conf.getInt(DFSConfigKeys.DFS_NUM_BUCKETS_KEY,
-            DFSConfigKeys.DFS_NUM_BUCKETS_DEFAULT)); // TODO: GABRIEL - test
-
-    private final Iterator<BlockReportBlock> inner = iterator();
-
-    public ProvidedBlockList(BlockReportBucket[] buckets, long[] hashes, int numBlocks) {
-      super(buckets, hashes, numBlocks);
-    }
-
-    @Override
-    public Iterator<BlockReportBlock> iterator() {
-      return new Iterator<BlockReportBlock>() {
-        @Override
-        public BlockReportBlock next() { return inner.next(); }
-        @Override
-        public boolean hasNext() {
-          return inner.hasNext();
-        }
-        @Override
-        public void remove() {
-          throw new UnsupportedOperationException();
-        }
-      };
-    }
-  }
 
   public ReadWriteLock getLock() {
     return lock;

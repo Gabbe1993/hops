@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
+import com.google.common.base.Supplier;
 import io.hops.common.INodeUtil;
 import io.hops.exception.StorageException;
 import io.hops.metadata.HdfsStorageFactory;
@@ -37,15 +38,8 @@ import io.hops.transaction.lock.TransactionLocks;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.BlockLocation;
-import org.apache.hadoop.fs.CommonConfigurationKeys;
-import org.apache.hadoop.fs.ContentSummary;
-import org.apache.hadoop.fs.CreateFlag;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.FileSystem.Statistics;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
 import org.apache.hadoop.hdfs.client.HdfsDataInputStream;
@@ -85,6 +79,7 @@ import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.ShellBasedUnixGroupsMapping;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.util.VersionInfo;
 
 import java.io.BufferedOutputStream;
@@ -434,7 +429,7 @@ public class DFSTestUtil {
     int curReplicas = 0;
     int curNeededReplicas = 0;
     int count = 0;
-    final int ATTEMPTS = 20;
+    final int ATTEMPTS = 40;
 
     do {
       Thread.sleep(1000);
@@ -444,6 +439,8 @@ public class DFSTestUtil {
       curReplicas = r[1];
       curNeededReplicas = r[2];
       count++;
+      LOG.info("Cur needed replicas = " + curNeededReplicas +
+              " Cur replicas = " + curReplicas + " Cur racks = " + curRacks);
     } while ((curRacks != racks ||
         curReplicas != replicas ||
         curNeededReplicas != neededReplicas) && count < ATTEMPTS);
@@ -454,6 +451,40 @@ public class DFSTestUtil {
               neededReplicas + " Cur needed replicas = " + curNeededReplicas +
               " Replicas = " + replicas + " Cur replicas = " + curReplicas +
               " Racks = " + racks + " Cur racks = " + curRacks);
+    } else {
+      LOG.info(b + " is done replicated on #replicas = " + curReplicas);
+    }
+  }
+
+  /**
+   * Same as {@link #waitForReplication(MiniDFSCluster, ExtendedBlock, int, int, int)} but ignore neededreplicas and racks
+   */
+  public static void waitForReplication(MiniDFSCluster cluster, ExtendedBlock b, int replicas)
+          throws IOException, TimeoutException, InterruptedException {
+    int curRacks = 0;
+    int curReplicas = 0;
+    int curNeededReplicas = 0;
+    int count = 0;
+    final int ATTEMPTS = 600;
+
+    do {
+      Thread.sleep(1000);
+      int[] r = BlockManagerTestUtil
+              .getReplicaInfo(cluster.getNamesystem(), b.getLocalBlock());
+      curRacks = r[0];
+      curReplicas = r[1];
+      curNeededReplicas = r[2];
+      count++;
+      LOG.info("Cur needed replicas = " + curNeededReplicas +
+              " Cur replicas = " + curReplicas + " Cur racks = " + curRacks);
+    } while ((curReplicas != replicas) && count < ATTEMPTS);
+
+    if (count == ATTEMPTS) {
+      throw new TimeoutException(
+              "Timed out waiting for replication." + " Needed replicas = " +" Cur needed replicas = " + curNeededReplicas +
+                      " Replicas = " + replicas + " Cur replicas = " + curReplicas + " Cur racks = " + curRacks);
+    } else {
+      LOG.info(b + " is done replicated on #replicas = " + curReplicas);
     }
   }
 
