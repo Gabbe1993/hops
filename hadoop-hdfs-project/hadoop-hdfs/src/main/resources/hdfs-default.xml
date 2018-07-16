@@ -54,7 +54,7 @@
 
   <property>
     <name>dfs.namenode.servicerpc-address</name>
-    <value></value>
+    <value>localhost:60030</value>
     <description>
       RPC address for HDFS Services communication. BackupNode, Datanodes and all
       other services should be

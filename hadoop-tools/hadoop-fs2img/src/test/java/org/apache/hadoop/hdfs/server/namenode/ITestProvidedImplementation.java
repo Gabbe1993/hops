@@ -546,7 +546,7 @@ public class ITestProvidedImplementation {
     LOG.info("Setting replication of file {} to {}", filename, newReplication);
     fs.setReplication(file, newReplication);
     DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
-            file, newReplication, 1000000);
+            file, newReplication, 10000);
     DFSClient client = new DFSClient(new InetSocketAddress("localhost",
             cluster.getNameNodePort()), cluster.getConfiguration(0));
     getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
