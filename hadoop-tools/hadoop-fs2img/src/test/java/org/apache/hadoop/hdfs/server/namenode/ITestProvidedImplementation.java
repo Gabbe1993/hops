@@ -525,7 +525,7 @@ public class ITestProvidedImplementation {
    * Tests setting replication of provided files.
    * @throws Exception
    */
-  @Test(timeout = 100000)
+  @Test(timeout=50000)
   public void testSetReplicationForProvidedFiles() throws Exception {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
@@ -535,6 +535,34 @@ public class ITestProvidedImplementation {
             null,
             false, writer);
     setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
+  }
+
+  private void setAndUnsetReplication(String filename) throws Exception {
+    Path file = new Path(filename);
+    FileSystem fs = cluster.getFileSystem();
+    // set the replication to 4, and test that the file has
+    // the required replication.
+    short newReplication = 4;
+    LOG.info("Setting replication of file {} to {}", filename, newReplication);
+    fs.setReplication(file, newReplication);
+    DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
+            file, newReplication, 10000);
+    DFSClient client = new DFSClient(new InetSocketAddress("localhost",
+            cluster.getNameNodePort()), cluster.getConfiguration(0));
+    getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
+
+    // set the replication back to 1
+    newReplication = 1;
+    LOG.info("Setting replication of file {} back to {}",
+            filename, newReplication);
+    fs.setReplication(file, newReplication);
+    // defaultReplication number of replicas should be returned
+    int defaultReplication = conf.getInt(DFSConfigKeys.DFS_REPLICATION_KEY,
+            DFSConfigKeys.DFS_REPLICATION_DEFAULT);
+    DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
+            file, (short) defaultReplication, 10000);
+    getAndCheckBlockLocations(client, filename, baseFileLen, 1,
+            defaultReplication);
   }
 
   @Test//(timeout = 100000)
@@ -549,9 +577,9 @@ public class ITestProvidedImplementation {
                     {StorageType.DISK},
                     {StorageType.DISK}},
             false, writer);
-    setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
+    simpleSetAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
   }
-  private void setAndUnsetReplication(String filename) throws Exception {
+  private void simpleSetAndUnsetReplication(String filename) throws Exception {
     Path file = new Path(filename);
     FileSystem fs = cluster.getFileSystem();
     // set the replication, and test that the file has
@@ -560,14 +588,14 @@ public class ITestProvidedImplementation {
     LOG.info("Setting replication of file {} to {}", filename, newReplication);
     fs.setReplication(file, newReplication);
 
+   // DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
+   //         file, newReplication, 10000);
     ExtendedBlock b = DFSTestUtil.getFirstBlock(fs, file);
     // The replicas should be moved to the /default rack.
     DFSTestUtil.waitForReplication(cluster, b, newReplication);
     DFSClient client = new DFSClient(new InetSocketAddress("localhost",
         cluster.getNameNodePort()), cluster.getConfiguration(0));
     // wait for replica to get deleted
-    System.out.println("sleeping for replica to get deleted...");
-    Thread.sleep(60000);
     getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
 
     // set the replication back
@@ -578,8 +606,6 @@ public class ITestProvidedImplementation {
     NameNodeAdapter.setReplication(cluster.getNamesystem(), filename, newReplication);
     // We will have one excess replica that should be removed
     DFSTestUtil.waitForReplication(cluster, b, newReplication);
-    System.out.println("sleeping for replica to get deleted...");
-    Thread.sleep(60000);
     getAndCheckBlockLocations(client, filename, baseFileLen, 1,
             newReplication);
   }

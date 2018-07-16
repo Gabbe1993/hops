@@ -417,6 +417,32 @@ public class DFSTestUtil {
     return blocks.get(blockNo).isCorrupt();
   }
 
+  public static void waitForReplication(final DistributedFileSystem dfs,
+                                        final Path file, final short replication, int waitForMillis)
+          throws TimeoutException, InterruptedException {
+    GenericTestUtils.waitFor(new Supplier<Boolean>() {
+      @Override
+      public Boolean get() {
+        try {
+          FileStatus stat = dfs.getFileStatus(file);
+          BlockLocation[] locs = dfs.getFileBlockLocations(stat, 0, stat
+                  .getLen());
+          for (BlockLocation loc : locs) {
+
+            LOG.info("locs host len = " + loc.getHosts().length + " needed repl = " + replication);
+            if (replication != loc.getHosts().length) {
+              return false;
+            }
+          }
+          return true;
+        } catch (IOException e) {
+          LOG.info("getFileStatus on path " + file + " failed!", e);
+          return false;
+        }
+      }
+    }, 100, waitForMillis);
+  }
+
   /*
    * Wait up to 20s for the given block to be replicated across
    * the requested number of racks, with the requested number of
