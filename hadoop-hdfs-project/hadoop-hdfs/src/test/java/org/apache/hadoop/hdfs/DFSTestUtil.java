@@ -483,38 +483,6 @@ public class DFSTestUtil {
   }
 
   /**
-   * Same as {@link #waitForReplication(MiniDFSCluster, ExtendedBlock, int, int, int)} but ignore neededreplicas and racks
-   */
-  public static void waitForReplication(MiniDFSCluster cluster, ExtendedBlock b, int replicas)
-          throws IOException, TimeoutException, InterruptedException {
-    int curRacks = 0;
-    int curReplicas = 0;
-    int curNeededReplicas = 0;
-    int count = 0;
-    final int ATTEMPTS = 600;
-
-    do {
-      Thread.sleep(1000);
-      int[] r = BlockManagerTestUtil
-              .getReplicaInfo(cluster.getNamesystem(), b.getLocalBlock());
-      curRacks = r[0];
-      curReplicas = r[1];
-      curNeededReplicas = r[2];
-      count++;
-      LOG.info("Cur needed replicas = " + curNeededReplicas +
-              " Cur replicas = " + curReplicas + " Cur racks = " + curRacks);
-    } while ((curReplicas != replicas) && count < ATTEMPTS);
-
-    if (count == ATTEMPTS) {
-      throw new TimeoutException(
-              "Timed out waiting for replication." + " Needed replicas = " +" Cur needed replicas = " + curNeededReplicas +
-                      " Replicas = " + replicas + " Cur replicas = " + curReplicas + " Cur racks = " + curRacks);
-    } else {
-      LOG.info(b + " is done replicated on #replicas = " + curReplicas);
-    }
-  }
-
-  /**
    * Keep accessing the given file until the namenode reports that the
    * given block in the file contains the given number of corrupt replicas.
    */

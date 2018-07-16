@@ -525,7 +525,7 @@ public class ITestProvidedImplementation {
    * Tests setting replication of provided files.
    * @throws Exception
    */
-  @Test(timeout=50000)
+  @Test//(timeout=50000)
   public void testSetReplicationForProvidedFiles() throws Exception {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
@@ -546,7 +546,7 @@ public class ITestProvidedImplementation {
     LOG.info("Setting replication of file {} to {}", filename, newReplication);
     fs.setReplication(file, newReplication);
     DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
-            file, newReplication, 10000);
+            file, newReplication, 1000000);
     DFSClient client = new DFSClient(new InetSocketAddress("localhost",
             cluster.getNameNodePort()), cluster.getConfiguration(0));
     getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
@@ -577,37 +577,7 @@ public class ITestProvidedImplementation {
                     {StorageType.DISK},
                     {StorageType.DISK}},
             false, writer);
-    simpleSetAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
-  }
-  private void simpleSetAndUnsetReplication(String filename) throws Exception {
-    Path file = new Path(filename);
-    FileSystem fs = cluster.getFileSystem();
-    // set the replication, and test that the file has
-    // the required replication.
-    short newReplication = 3;
-    LOG.info("Setting replication of file {} to {}", filename, newReplication);
-    fs.setReplication(file, newReplication);
-
-   // DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
-   //         file, newReplication, 10000);
-    ExtendedBlock b = DFSTestUtil.getFirstBlock(fs, file);
-    // The replicas should be moved to the /default rack.
-    DFSTestUtil.waitForReplication(cluster, b, newReplication);
-    DFSClient client = new DFSClient(new InetSocketAddress("localhost",
-        cluster.getNameNodePort()), cluster.getConfiguration(0));
-    // wait for replica to get deleted
-    getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
-
-    // set the replication back
-    newReplication = 1;
-    LOG.info("Setting replication of file {} to {}",
-        filename, newReplication);
-    fs.setReplication(file, newReplication);
-    NameNodeAdapter.setReplication(cluster.getNamesystem(), filename, newReplication);
-    // We will have one excess replica that should be removed
-    DFSTestUtil.waitForReplication(cluster, b, newReplication);
-    getAndCheckBlockLocations(client, filename, baseFileLen, 1,
-            newReplication);
+    setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
   }
 
   @Test()
