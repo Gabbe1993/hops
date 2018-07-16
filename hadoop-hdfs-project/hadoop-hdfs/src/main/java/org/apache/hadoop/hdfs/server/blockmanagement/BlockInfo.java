@@ -27,6 +27,7 @@ import io.hops.transaction.EntityManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.hdfs.StorageType;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
@@ -333,7 +334,9 @@ public class BlockInfo extends Block {
     DatanodeStorageInfo[] storages = dn.getStorageInfos();
     List<Integer> sids = new ArrayList<Integer>();
     for(DatanodeStorageInfo s : storages) {
-      sids.add(s.getSid());
+      if(!s.getStorageType().equals(StorageType.PROVIDED)) {
+        sids.add(s.getSid());
+      }
     }
 
     BlockInfoDataAccess da =

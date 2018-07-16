@@ -546,38 +546,23 @@ public class ITestProvidedImplementation {
     LOG.info("Setting replication of file {} to {}", filename, newReplication);
     fs.setReplication(file, newReplication);
     DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
-            file, newReplication, 10000);
+            file, newReplication, 1000000);
     DFSClient client = new DFSClient(new InetSocketAddress("localhost",
             cluster.getNameNodePort()), cluster.getConfiguration(0));
     getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
 
     // set the replication back to 1
-    newReplication = 1;
-    LOG.info("Setting replication of file {} back to {}",
-            filename, newReplication);
-    fs.setReplication(file, newReplication);
+    //newReplication = 1;
+    //LOG.info("Setting replication of file {} back to {}",
+    //        filename, newReplication);
+    //fs.setReplication(file, newReplication);
     // defaultReplication number of replicas should be returned
-    int defaultReplication = conf.getInt(DFSConfigKeys.DFS_REPLICATION_KEY,
-            DFSConfigKeys.DFS_REPLICATION_DEFAULT);
-    DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
-            file, (short) defaultReplication, 10000);
-    getAndCheckBlockLocations(client, filename, baseFileLen, 1,
-            defaultReplication);
-  }
-
-  @Test//(timeout = 100000)
-  public void testSimpleProvidedReplication() throws Exception {
-    ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
-            FixedBlockResolver.class);
-    // GABRIEL - Replication does not work on more than 1 PROVIDED datanode,
-    // we need to have exactly one  {StorageType.PROVIDED, StorageType.DISK} datanode
-    startCluster(nnDirPath, 3, null,
-            new StorageType[][]{
-                    {StorageType.PROVIDED, StorageType.DISK},
-                    {StorageType.DISK},
-                    {StorageType.DISK}},
-            false, writer);
-    setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
+    //int defaultReplication = conf.getInt(DFSConfigKeys.DFS_REPLICATION_KEY,
+    //        DFSConfigKeys.DFS_REPLICATION_DEFAULT);
+    //DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
+    //        file, (short) defaultReplication, Integer.MAX_VALUE);
+    //getAndCheckBlockLocations(client, filename, baseFileLen, 1,
+    //        defaultReplication);
   }
 
   @Test()
@@ -864,6 +849,7 @@ public class ITestProvidedImplementation {
 //  }
 
   @Test
+  @Ignore // Test is using DatanodeAdminManager's maintenance which we don't have in hops
   public void testDatanodeLifeCycle() throws Exception {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
@@ -935,10 +921,7 @@ public class ITestProvidedImplementation {
         UGIResolver.class);
     String packageName = "org.apache.hadoop.hdfs.server.blockmanagement";
     String[] policies = new String[] {
-        "BlockPlacementPolicyDefault",
-        "BlockPlacementPolicyRackFaultTolerant",
-        "BlockPlacementPolicyWithNodeGroup",
-        "BlockPlacementPolicyWithUpgradeDomain"};
+        "BlockPlacementPolicyDefault"};
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
     String[] racks =
