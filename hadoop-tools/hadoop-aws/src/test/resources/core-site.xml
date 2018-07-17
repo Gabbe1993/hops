@@ -36,6 +36,15 @@
         <value>simple</value>
     </property>
 
+    <property>
+        <name>fs.s3a.endpoint</name>
+        <description>AWS S3 endpoint to connect to. An up-to-date list is
+            provided in the AWS Documentation: regions and endpoints. Without this
+            property, the standard region (s3.amazonaws.com) is assumed.
+        </description>
+        <value>s3.eu-central-1.amazonaws.com</value>
+    </property>
+
     <!--
     To run these tests.
 
