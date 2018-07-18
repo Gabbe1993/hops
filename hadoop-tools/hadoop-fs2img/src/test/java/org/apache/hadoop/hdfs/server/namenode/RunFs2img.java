@@ -9,8 +9,7 @@ import static java.lang.System.exit;
 
 public class RunFs2img {
 
-  public static void main(String[] args) {
-
+  public int run(String[] args) {
     System.setProperty("hadoop.home.dir", "/");
 
     String path = "/home/gabriel/Documents/hops/hadoop-run/";
@@ -32,7 +31,7 @@ public class RunFs2img {
       exit(-1);
     }
 
-    if(args.length == 0) {
+    if(args == null || args.length == 0) {
       // default parameters
       args = new String[]{"-b", "org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap", "s3a://provided-test-ireland/"};
     }
@@ -46,26 +45,13 @@ public class RunFs2img {
       rt.exec("mv /home/gabriel/Documents/hops/hdfs/ /home/gabriel/Documents/hops/hadoop-run/");
       rt.exec("mv /home/gabriel/Documents/hops/blocks.csv /home/gabriel/Documents/hops/hadoop-run/");
 
-      /*
-      // now start a namenode and load the fsimage
-      rt.exec(env);
-      rt.exec(export_nn);
-      rt.exec(start_nn);
-      */
-
-     /* Configuration conf = new HdfsConfiguration();
-      //conf.set(DFS_NAMENODE_NAME_DIR_KEY, nspath.toString());
-      MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
-              .format(false)
-              .manageNameDfsDirs(false)
-              .numDataNodes(1)
-              .build();
-      cluster.waitActive();*/
-
     } catch (Exception e) {
       e.printStackTrace();
     }
+    return ret;
+  }
 
-    exit(ret);
+  public static void main(String[] args) {
+    new RunFs2img().run(args);
   }
 }

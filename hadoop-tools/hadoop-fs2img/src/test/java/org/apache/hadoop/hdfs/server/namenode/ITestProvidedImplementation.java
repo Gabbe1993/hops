@@ -503,7 +503,7 @@ public class ITestProvidedImplementation {
     assertEquals(expectedBlocks, locatedBlocks.getLocatedBlocks().size());
     DatanodeInfo[] locations =
         locatedBlocks.getLocatedBlocks().get(0).getLocations();
-    assertEquals(expectedLocations, locations.length); // TODO: GABRIEL - The replication is correct but the locations and db is not updated
+    assertEquals(expectedLocations, locations.length);
     checkUniqueness(locations);
     return locations;
   }
@@ -939,5 +939,24 @@ public class ITestProvidedImplementation {
       setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
       cluster.shutdown();
     }
+  }
+
+
+  @Test
+  public void testRunFs2imgWithS3() throws Exception {
+    RunFs2img runner = new RunFs2img();
+    runner.run(null);
+    startCluster(nnDirPath, 3, new StorageType[]{StorageType.PROVIDED, StorageType.DISK},
+            null, false, null);
+
+    DFSClient client = new DFSClient(
+            new InetSocketAddress("localhost", cluster.getNameNodePort()),
+            cluster.getConfiguration(0));
+    String filename = "start_dn.sh";
+    LocatedBlocks locatedBlocks = client.getLocatedBlocks(
+            filename, 0, baseFileLen);
+
+    LOG.info(locatedBlocks.toString());
+    assertNotNull(locatedBlocks);
   }
 }
