@@ -307,13 +307,14 @@ public class ProvidedStorageMap {
     private final List<DatanodeDescriptor> dnR = new ArrayList<>();
     public final static String NETWORK_LOCATION = "/REMOTE";
     public final static String NAME = "PROVIDED";
+    private final static String providedDnUuid = "PROVIDED-" + UUID.randomUUID().toString();
 
     ProvidedDescriptor() throws IOException {
       super(new StorageMap(false),
             new DatanodeID(
             null,
             null,
-            UUID.randomUUID().toString(), // this is a default created PROVIDED dn
+                    providedDnUuid, // this is a default created PROVIDED dn
             0,
             0,
             0));

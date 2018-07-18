@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
+import io.hops.metadata.HdfsStorageFactory;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -33,11 +34,19 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.DFSTestUtil;
+import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
+import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
+import org.mortbay.log.Log;
+
+import static org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap.fileNameFromBlockPoolID;
 
 /**
  * Create FSImage from an external namespace.
@@ -56,6 +65,13 @@ public class FileSystemImage implements Tool {
   @Override
   public void setConf(Configuration conf) {
     this.conf = conf;
+    try {
+      HdfsStorageFactory.setConfiguration(conf);
+      HdfsStorageFactory.formatStorage();
+      DFSTestUtil.formatNameNode(conf);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
     // require absolute URI to write anywhere but local
     FileSystem.setDefaultUri(conf, new File(".").toURI().toString());
   }
@@ -138,21 +154,23 @@ public class FileSystemImage implements Tool {
       printUsage();
       return -1;
     }
-
     List<INode> inodes = new ArrayList<>();
     List<BlockInfo> blocks = new ArrayList<>();
 
+    Log.info("Running fs2img over " + rem[0]);
     try (ImageWriter w = new ImageWriter(opts)) {
       for (TreePath e : new FSTreeWalk(new Path(rem[0]), getConf())) {
         INode inode = w.accept(e);
         if (inode != null) {
           inodes.add(inode);
           if (inode instanceof INodeFile) {
-            blocks.addAll(e.getBlockInfos());  // GABRIEL - test. only adding blocks if file and not directory
+            blocks.addAll(e.getBlockInfos());  
           }
         }
       }
       w.close();
+      Log.info("Found blocks: " + Arrays.toString(blocks.toArray()));
+      Log.info("Found #inodes: " + inodes.size());
       w.persistBlocks(blocks);
       w.persistInodesAndUsers(inodes);
     } catch (IOException e) {
@@ -160,9 +178,6 @@ public class FileSystemImage implements Tool {
     }
     return 0;
   }
-
-
-
 
   public static void main(String[] argv) throws Exception {
     int ret = ToolRunner.run(new FileSystemImage(), argv);

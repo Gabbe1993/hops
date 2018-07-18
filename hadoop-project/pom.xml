@@ -115,7 +115,7 @@
     <make-maven-plugin.version>1.0-beta-1</make-maven-plugin.version>
     <native-maven-plugin.version>1.0-alpha-8</native-maven-plugin.version>
     <surefire.fork.timeout>900</surefire.fork.timeout>
-    <aws-java-sdk.version>1.10.6</aws-java-sdk.version>
+    <aws-java-sdk.version>1.7.4</aws-java-sdk.version>
   </properties>
 
   <dependencyManagement>
@@ -1030,6 +1030,17 @@
         <artifactId>assertj-core</artifactId>
         <version>3.8.0</version>
         <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-s3</artifactId>
+        <version>1.7.4</version>
+      </dependency>
+      <dependency>
+        <groupId>io.hops</groupId>
+        <artifactId>hadoop-aws</artifactId>
+        <version>${project.version}</version>
       </dependency>
 
     </dependencies>

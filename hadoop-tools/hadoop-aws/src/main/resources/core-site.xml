@@ -43,9 +43,14 @@
             property, the standard region (s3.amazonaws.com) is assumed.
             Example:
             Ireland: s3.eu-west-1.amazonaws.com (v2)
-            Frankfurt: eu-central-1.amazonaws.com (v4, does not work with old s3n)
+            Frankfurt: s3.eu-central-1.amazonaws.com (v4, does not work with our current aws-sdk-1.7.0 or old s3n!)
         </description>
         <value>s3.eu-west-1.amazonaws.com</value>
+    </property>
+
+    <property>
+        <name>dfs.provided.aliasmap.text.read.file</name>
+        <value>/home/gabriel/Documents/hops/hadoop-run/blocks.csv</value>
     </property>
 
     <!--

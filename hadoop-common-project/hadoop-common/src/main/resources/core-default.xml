@@ -949,7 +949,7 @@
 
 <property>
   <name>fs.s3a.threads.max</name>
-  <value>10</value>
+  <value>256</value>
   <description>The total number of threads available in the filesystem for data
     uploads *or any other queued filesystem operation*.</description>
 </property>
@@ -969,7 +969,7 @@
 
 <property>
   <name>fs.s3a.multipart.size</name>
-  <value>100M</value>
+  <value>100000000</value>
   <description>How big (in bytes) to split upload or copy operations up into.
     A suffix from the set {K,M,G,T,P} may be used to scale the numeric value.
   </description>
@@ -1037,7 +1037,7 @@
 
 <property>
   <name>fs.s3a.block.size</name>
-  <value>32M</value>
+  <value>32000000</value>
   <description>Block size to use when reading files using s3a: file system.
     A suffix from the set {K,M,G,T,P} may be used to scale the numeric value.
   </description>
