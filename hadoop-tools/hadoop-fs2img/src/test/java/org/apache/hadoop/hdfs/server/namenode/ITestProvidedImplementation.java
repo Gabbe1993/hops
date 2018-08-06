@@ -74,8 +74,8 @@ public class ITestProvidedImplementation {
   private final Random r = new Random();
   private final File fBASE = new File(MiniDFSCluster.getBaseDirectory());
   private final Path pBASE = new Path(fBASE.toURI().toString());
-  private final Path providedPath = new Path(pBASE, "providedDir");
-  private final Path nnDirPath = new Path(pBASE, "nnDir");
+  private final Path providedPath = new Path(pBASE, "providedDir"); // folder for created provided files
+  private final Path nnDirPath = new Path(pBASE, "nnDir"); // folder for .csv file
   private final String singleUser = "usr1";
   private final String singleGroup = "grp1";
   private final int numFiles = 10;
@@ -86,8 +86,6 @@ public class ITestProvidedImplementation {
   private String bpid = "";
   private Configuration conf;
   private MiniDFSCluster cluster;
-  private ArrayList<INode> inodes;
-  private ArrayList<BlockInfo> blocks;
 
   @Before
   public void setSeed() throws Exception {
@@ -191,8 +189,8 @@ public class ITestProvidedImplementation {
         .clusterID(clusterID)
         .blockPoolID(bpid);
 
-    inodes = new ArrayList<>();
-    blocks = new ArrayList<>();
+    ArrayList<INode> inodes = new ArrayList<>();
+    ArrayList<BlockInfo> blocks = new ArrayList<>();
 
     try (ImageWriter w = new ImageWriter(opts)) {
       for (TreePath e : t) {
@@ -204,7 +202,7 @@ public class ITestProvidedImplementation {
           }
         }
       }
-      LOG.info("found "+inodes.size()+" inodes and " + blocks.size() + " blocks from fs2img");
+      LOG.info("found "+ inodes.size()+" inodes and " + blocks.size() + " blocks from fs2img");
       w.close();
 
       w.persistBlocks(blocks); // make sure to start cluster before persisting
@@ -534,15 +532,14 @@ public class ITestProvidedImplementation {
                     StorageType.PROVIDED, StorageType.DISK},
             null,
             false, writer);
-    setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
+    setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix, (short)4);
   }
 
-  private void setAndUnsetReplication(String filename) throws Exception {
+  private void setAndUnsetReplication(String filename, short newReplication) throws Exception {
     Path file = new Path(filename);
     FileSystem fs = cluster.getFileSystem();
-    // set the replication to 4, and test that the file has
+    // set the replication, and test that the file has
     // the required replication.
-    short newReplication = 4;
     LOG.info("Setting replication of file {} to {}", filename, newReplication);
     fs.setReplication(file, newReplication);
     DFSTestUtil.waitForReplication((DistributedFileSystem) fs,
@@ -936,27 +933,109 @@ public class ITestProvidedImplementation {
       verifyFileSystemContents();
       // wait for the replication to finish
       Thread.sleep(100000);
-      setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix);
+      setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix, (short)4);
       cluster.shutdown();
     }
   }
 
 
   @Test
+  @Ignore  // this test will only work if you have configured s3 properly (auth.xml, bucket, scrips in RunFs2img)
   public void testRunFs2imgWithS3() throws Exception {
-    RunFs2img runner = new RunFs2img();
-    runner.run(null);
-    startCluster(nnDirPath, 3, new StorageType[]{StorageType.PROVIDED, StorageType.DISK},
-            null, false, null);
+    String filename = "start_dn.sh"; // This filename has to match filename in s3 that we are pulling
+    int replication = 2;
 
+    File newFile = new File(
+            new Path(providedPath, filename).toUri());
+    if(!newFile.exists()) {
+      try {
+        LOG.info("Creating " + newFile.toString());
+        newFile.createNewFile();
+        Writer writer = new OutputStreamWriter(
+                new FileOutputStream(newFile.getAbsolutePath()), "utf-8");
+        for(int j=0; j < baseFileLen; j++) {
+          writer.write("0");
+        }
+        writer.flush();
+        writer.close();
+        providedDataSize += newFile.length();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+    conf.set("hdfs.namenode.block.provider.id", "PROVIDED-dn");
+    RunFs2img runner = new RunFs2img();
+    runner.run(null, conf);
+    startCluster(nnDirPath, 3, null,
+            new StorageType[][]{
+                    {StorageType.PROVIDED, StorageType.DISK},
+                    {StorageType.PROVIDED, StorageType.DISK},
+                    {StorageType.PROVIDED, StorageType.DISK}},
+            false, null);
+
+    setAndUnsetReplication(filename, (short) replication);
+
+    File file = new File(new Path(providedPath, filename).toUri());
+    long fileLen = file.length();
+    long blockSize = conf.getLong(FixedBlockResolver.BLOCKSIZE,
+            FixedBlockResolver.BLOCKSIZE_DEFAULT);
+    long numLocatedBlocks =
+            fileLen == 0 ? 1 : (long) Math.ceil(fileLen * 1.0 / blockSize);
     DFSClient client = new DFSClient(
             new InetSocketAddress("localhost", cluster.getNameNodePort()),
             cluster.getConfiguration(0));
-    String filename = "start_dn.sh";
+
+    getAndCheckBlockLocations(client, "/" + filename, fileLen,
+            numLocatedBlocks, replication);
+
+ /*   DFSClient client = new DFSClient(
+            new InetSocketAddress("localhost", cluster.getNameNodePort()),
+            cluster.getConfiguration(0));
     LocatedBlocks locatedBlocks = client.getLocatedBlocks(
             filename, 0, baseFileLen);
 
     LOG.info(locatedBlocks.toString());
-    assertNotNull(locatedBlocks);
+    assertNotNull(locatedBlocks);*/
+  }
+
+  @Test
+  public void testGetFileFromS3() throws Exception {
+    String filename = "export_nn.sh"; // This filename has to match filename in s3 that we are pulling
+    int replication = 2;
+
+    createFile(filename);
+    String bucket = "s3a://provided-test-ireland/";
+    createImage(new FSTreeWalk(new Path(bucket), conf), nnDirPath,
+            FixedBlockResolver.class);
+
+    startCluster(nnDirPath, 3, null,
+            new StorageType[][]{
+                    {StorageType.PROVIDED, StorageType.DISK},
+                    {StorageType.PROVIDED, StorageType.DISK},
+                    {StorageType.PROVIDED, StorageType.DISK}},
+            false, null);
+
+    setAndUnsetReplication("/" + filename, (short) replication);
+  }
+
+  private void createFile(String filename) {
+    File newFile = new File(
+            new Path(providedPath, filename).toUri());
+    if(!newFile.exists()) {
+      try {
+        LOG.info("Creating " + newFile.toString());
+        newFile.createNewFile();
+        Writer writer = new OutputStreamWriter(
+                new FileOutputStream(newFile.getAbsolutePath()), "utf-8");
+        for(int j=0; j < baseFileLen; j++) {
+          writer.write("0");
+        }
+        writer.flush();
+        writer.close();
+        providedDataSize += newFile.length();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
   }
 }
