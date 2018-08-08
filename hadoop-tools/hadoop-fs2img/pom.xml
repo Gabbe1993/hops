@@ -65,6 +65,11 @@
       <artifactId>mockito-all</artifactId>
       <scope>test</scope>
     </dependency>
+      <dependency>
+          <groupId>com.google.caliper</groupId>
+          <artifactId>caliper</artifactId>
+          <version>0.5-rc1</version>
+      </dependency>
   </dependencies>
 
   <build>
