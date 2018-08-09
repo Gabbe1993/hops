@@ -1,5 +1,10 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.Bucket;
 import com.google.caliper.Runner;
 import io.hops.metadata.HdfsStorageFactory;
 import org.apache.commons.logging.impl.Log4JLogger;
@@ -20,13 +25,13 @@ import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Random;
 
 import com.google.caliper.SimpleBenchmark;
 import static org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap.fileNameFromBlockPoolID;
+
 
 /**
  * Created by gabriel on 2018-08-08.
@@ -35,9 +40,8 @@ public class ProvidedBenchmark extends SimpleBenchmark {
 
   public static void main(String[] args) throws Exception {
     new Runner().run(
-            // These are the command line arguments for Runner. You can add
-            // "--trials", "10" to run each benchmark 10 times each.
-            "--trials", "10",
+            // These are the command line arguments for Runner.
+           // "--trials", "10",
             ProvidedBenchmark.class.getName()
     );
   }
@@ -45,7 +49,7 @@ public class ProvidedBenchmark extends SimpleBenchmark {
   @Rule
   public TestName name = new TestName();
   public static final Logger LOG =
-          LoggerFactory.getLogger(ITestProvidedImplementation.class);
+          LoggerFactory.getLogger(ProvidedBenchmark.class);
 
   private final Random r = new Random();
   private final File fBASE = new File(MiniDFSCluster.getBaseDirectory());
@@ -57,18 +61,46 @@ public class ProvidedBenchmark extends SimpleBenchmark {
   private String bpid = "";
   private Configuration conf;
   private MiniDFSCluster cluster;
-  String bucket = "s3a://provided-test-ireland/";
+
+  private AmazonS3 s3;
+  private S3Util s3Util;
+  private final String BUCKET_NAME = "bla2-bucket"; // provided-test-ireland
+  private Bucket bucket = null;
 
   public ProvidedBenchmark() {
     try {
-      setSeed();
+      s3Util = new S3Util(s3);
+      setupConfig();
+      setupAws();
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
+  private void setupAws() {
+    S3Util.setSystemPropertiesS3Credentials();
 
-   @Before
-  public void setSeed() throws Exception {
+    s3 = new AmazonS3Client();
+    s3.setRegion(Region.getRegion(Regions.EU_WEST_1));
+    bucket = s3Util.createBucket(BUCKET_NAME);
+    if (bucket == null) {
+      System.out.println("Error creating bucket!\n");
+    } else {
+      System.out.println("Done!\n");
+    }
+    //createUploadFiles();
+  }
+
+  private void createUploadFiles() {
+    int files = 1;
+    for (int i = 0; i < files; i++) {
+      String filename = "test-file-" + i + ".txt";
+      File file = s3Util.createFile(filename);
+      s3Util.uploadFile(BUCKET_NAME, filename, file);
+    }
+  }
+
+  @Before
+  public void setupConfig() throws Exception {
     if (fBASE.exists() && !FileUtil.fullyDelete(fBASE)) {
       throw new IOException("Could not fully delete " + fBASE);
     }
@@ -104,7 +136,7 @@ public class ProvidedBenchmark extends SimpleBenchmark {
   // "time" methods are benchmarked
   public void timeGetFileFromS3(int reps) throws Exception {
     for (int i = 0; i < reps; i++) {
-      createImage(new FSTreeWalk(new Path(bucket), conf), nnDirPath,
+      createImage(new FSTreeWalk(new Path("s3a://" + BUCKET_NAME +"/"), conf), nnDirPath,
               FixedBlockResolver.class);
     }
   }

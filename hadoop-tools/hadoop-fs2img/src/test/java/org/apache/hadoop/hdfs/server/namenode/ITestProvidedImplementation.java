@@ -17,8 +17,14 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 import io.hops.metadata.HdfsStorageFactory;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.impl.Log4JLogger;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
@@ -26,7 +32,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.StorageType;
 import org.apache.hadoop.hdfs.*;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.aliasmap.InMemoryAliasMap;
@@ -37,6 +42,9 @@ import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.InMemoryLevelDBAliasMapClient;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
+import org.apache.hadoop.hdfs.server.datanode.FinalizedProvidedReplica;
+import org.apache.hadoop.hdfs.server.datanode.ProvidedReplica;
+import org.apache.hadoop.hdfs.server.datanode.TestProvidedReplicaImpl;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
@@ -50,6 +58,8 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.io.Writer;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
@@ -297,6 +307,7 @@ public class ITestProvidedImplementation {
     long diskCapacity = 1000;
     // set the DISK capacity for testing
     for (DataNode dn: cluster.getDataNodes()) {
+
       for (FsVolumeSpi ref : dn.getFSDataset().getVolumes()) {
         if (ref.getStorageType() == StorageType.DISK) {
           ((FsVolumeImpl) ref).setCapacityForTesting(diskCapacity);
@@ -527,7 +538,7 @@ public class ITestProvidedImplementation {
   public void testSetReplicationForProvidedFiles() throws Exception {
     ImageWriter writer = createImage(new FSTreeWalk(providedPath, conf), nnDirPath,
         FixedBlockResolver.class);
-    startCluster(nnDirPath, 10,
+    startCluster(nnDirPath, 5,
             new StorageType[]{
                     StorageType.PROVIDED, StorageType.DISK},
             null,
@@ -999,26 +1010,35 @@ public class ITestProvidedImplementation {
   }
 
   @Test
-  public void testGetFileFromS3() throws Exception {
-    String filename = "export_nn.sh"; // This filename has to match filename in s3 that we are pulling
-    int replication = 2;
+  public void testReplicatingFileFromS3() throws Exception {
+    String filename = "testS3.dat"; // This filename has to match filename in s3 that we are pulling
+    int replication = 4;
 
-    createFile(filename);
     String bucket = "s3a://provided-test-ireland/";
-    createImage(new FSTreeWalk(new Path(bucket), conf), nnDirPath,
+ //   createFile(filename);
+    createImage(new FSTreeWalk(new Path(bucket), conf), nnDirPath, // TODO: GABRIEL - replication does not work with file from s3
             FixedBlockResolver.class);
 
-    startCluster(nnDirPath, 3, null,
-            new StorageType[][]{
-                    {StorageType.PROVIDED, StorageType.DISK},
-                    {StorageType.PROVIDED, StorageType.DISK},
-                    {StorageType.PROVIDED, StorageType.DISK}},
+    startCluster(nnDirPath, 10,
+            new StorageType[]{StorageType.PROVIDED, StorageType.DISK}, null,
             false, null);
 
+    DataNode providedDatanode = cluster.getDataNodes().get(0);
+    DatanodeStorageInfo providedDNInfo = getProvidedDatanodeStorageInfo();
+    int initialBRCount = providedDNInfo.getBlockReportCount();
+    FSNamesystem namesystem = cluster.getNameNode().getNamesystem();
+    DatanodeManager dnm = namesystem.getBlockManager().getDatanodeManager();
+    DatanodeStatistics dnStats = dnm.getDatanodeStatistics();
+    DatanodeDescriptor dnDesc = getDatanodeDescriptor(dnm, 0);
+
     setAndUnsetReplication("/" + filename, (short) replication);
+
+    //DFSClient client = new DFSClient(new InetSocketAddress("localhost",
+    //        cluster.getNameNodePort()), cluster.getConfiguration(0));
+    //getAndCheckBlockLocations(client, "/" + filename, baseFileLen, 1, 1);
   }
 
-  private void createFile(String filename) {
+  private File createFile(String filename) {
     File newFile = new File(
             new Path(providedPath, filename).toUri());
     if(!newFile.exists()) {
@@ -1037,5 +1057,86 @@ public class ITestProvidedImplementation {
         e.printStackTrace();
       }
     }
+    return newFile;
   }
+
+  @Ignore // only works if configured s3 credentials in file
+  @Test
+  public void testProvidedReplicaReadFromS3() throws IOException {
+    final String BASE_DIR = "/";
+    // length of the file that is associated with the provided blocks.
+    final long FILE_LEN = 128 * 1024 * 10L + 64 * 1024;
+    // length of each provided block.
+    final long BLK_LEN = 128 * 1024L;
+
+    // setup aws credentials
+    S3Util.setSystemPropertiesS3Credentials();
+
+    AmazonS3Client s3 = new AmazonS3Client();
+    s3.setRegion(Region.getRegion(Regions.EU_WEST_1));
+
+    String bucketName = "provided-test-ireland";
+    String key = "testS3.dat";
+    File providedFile = createFile(key);
+
+    URI bucketUri = null;
+    try {
+      bucketUri = new URI("s3a://"+bucketName+"/"+key);
+    } catch (URISyntaxException e) {
+      e.printStackTrace();
+    }
+
+    S3Util util = new S3Util(s3);
+    util.uploadFile(bucketName, key, providedFile);
+
+    List<ProvidedReplica> replicas = new ArrayList<ProvidedReplica>();
+    int numReplicas = 1;
+    LOG.info("Creating " + numReplicas + " provided S3 replicas");
+    for (int i=0; i<numReplicas; i++) {
+      long currentReplicaLength =
+              FILE_LEN >= (i+1)*BLK_LEN ? BLK_LEN : FILE_LEN - i*BLK_LEN;
+      replicas.add(
+              new FinalizedProvidedReplica(i, bucketUri, i*BLK_LEN,
+                      currentReplicaLength, 0, null,
+                      null, conf,  new Path(bucketUri).getFileSystem(conf)));
+    }
+
+    // Get an object and print its contents.
+    System.out.println("Downloading an object");
+    S3Object fullObject = s3.getObject(new GetObjectRequest(bucketName, key));
+    System.out.println("Content-Type: " + fullObject.getObjectMetadata().getContentType());
+    System.out.println("Content: ");
+
+    // Read the text input stream one line at a time and display each line.
+    BufferedReader reader = new BufferedReader(new InputStreamReader(fullObject.getObjectContent()));
+    OutputStream out = new FileOutputStream(providedFile);
+    String line = null;
+    while ((line = reader.readLine()) != null) {
+      out.write(line.getBytes());
+      System.out.println("wrote: " + line);
+    }
+    out.close();
+    reader.close();
+
+    for (int i = 0; i < replicas.size(); i++) {
+      ProvidedReplica replica = replicas.get(i);
+
+      InputStream in =  replica.getDataInputStream(0);
+      // block data should exist!
+      assertTrue(replica.blockDataExists());
+      assertEquals(bucketUri, replica.getBlockURI());
+      TestProvidedReplicaImpl.verifyReplicaContents(providedFile, in,
+              BLK_LEN*i, replica.getBlockDataLength());
+    }
+    LOG.info("All replica contents verified");
+
+    providedFile.delete();
+    s3.deleteObject(bucketName, key);
+
+    // the block data should no longer be found!
+    for (ProvidedReplica replica : replicas) {
+      assertTrue(!replica.blockDataExists());
+    }
+  }
+
 }
