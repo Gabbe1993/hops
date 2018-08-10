@@ -77,7 +77,11 @@ public class ProvidedBenchmark extends SimpleBenchmark {
     }
   }
   private void setupAws() {
-    S3Util.setSystemPropertiesS3Credentials();
+    // load access keys from local file
+    final String credFileName =
+            "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/src/test/java/org/apache/hadoop/hdfs/server/namenode/awsCred.txt";
+
+    S3Util.setSystemPropertiesS3Credentials(credFileName);
 
     s3 = new AmazonS3Client();
     s3.setRegion(Region.getRegion(Regions.EU_WEST_1));
@@ -125,8 +129,8 @@ public class ProvidedBenchmark extends SimpleBenchmark {
             new Path(nnDirPath, fileNameFromBlockPoolID(bpid)).toString());
     conf.set(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_TEXT_DELIMITER, ",");
 
-    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR_PROVIDED,
-            new File(providedPath.toUri()).toString());
+    //conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR_PROVIDED,
+    //        new File(providedPath.toUri()).toString());
 
     HdfsStorageFactory.setConfiguration(conf);
     HdfsStorageFactory.formatStorage();

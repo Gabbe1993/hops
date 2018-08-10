@@ -24,7 +24,6 @@ import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import io.hops.metadata.HdfsStorageFactory;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.impl.Log4JLogger;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
@@ -96,6 +95,7 @@ public class ITestProvidedImplementation {
   private String bpid = "";
   private Configuration conf;
   private MiniDFSCluster cluster;
+  private final String BUCKET_NAME =  "s3a://provided-test-ireland/";
 
   @Before
   public void setSeed() throws Exception {
@@ -122,9 +122,10 @@ public class ITestProvidedImplementation {
     conf.set(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_TEXT_READ_FILE,
         new Path(nnDirPath, fileNameFromBlockPoolID(bpid)).toString());
     conf.set(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_TEXT_DELIMITER, ",");
-
     conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR_PROVIDED,
-        new File(providedPath.toUri()).toString());
+            new File(providedPath.toUri()).toString());
+    conf.set(DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY,
+            new File(providedPath.toUri()).toString()); // if we want to test with s3 this has to change to s3 url
     
     HdfsStorageFactory.setConfiguration(conf);
     HdfsStorageFactory.formatStorage();
@@ -223,25 +224,34 @@ public class ITestProvidedImplementation {
       throw e;
     }
   }
+
   void startCluster(Path nspath, int numDatanodes,
                     StorageType[] storageTypes,
                     StorageType[][] storageTypesPerDatanode,
-                    boolean doFormat, ImageWriter writer) throws IOException {
+                    boolean doFormat) throws IOException {
     startCluster(nspath, numDatanodes, storageTypes, storageTypesPerDatanode,
-        doFormat, null, writer);
+        doFormat, null);
   }
 
   void startCluster(Path nspath, int numDatanodes,
                     StorageType[] storageTypes,
                     StorageType[][] storageTypesPerDatanode,
-                    boolean doFormat, String[] racks, ImageWriter writer) throws IOException {
-    conf.set(DFS_NAMENODE_NAME_DIR_KEY, nspath.toString());
+                    boolean doFormat, String[] racks) throws IOException {
+    mainStartCluster(nspath, numDatanodes, storageTypes, storageTypesPerDatanode,
+            doFormat, true, racks);
+  }
 
+  void mainStartCluster(Path nspath, int numDatanodes,
+                        StorageType[] storageTypes,
+                        StorageType[][] storageTypesPerDatanode,
+                        boolean doFormat, boolean manageDfsDataDir, String[] racks) throws IOException {
+    conf.set(DFS_NAMENODE_NAME_DIR_KEY, nspath.toString());
 
     if (storageTypesPerDatanode != null) {
       cluster = new MiniDFSCluster.Builder(conf)
           .format(doFormat)
           .manageNameDfsDirs(doFormat)
+           .manageDataDfsDirs(manageDfsDataDir)
           .numDataNodes(numDatanodes)
           .storageTypes(storageTypesPerDatanode)
           .racks(racks)
@@ -250,6 +260,7 @@ public class ITestProvidedImplementation {
       cluster = new MiniDFSCluster.Builder(conf)
           .format(doFormat)
           .manageNameDfsDirs(doFormat)
+           .manageDataDfsDirs(manageDfsDataDir)
           .numDataNodes(numDatanodes)
           .storagesPerDatanode(storageTypes.length)
           .storageTypes(storageTypes)
@@ -259,6 +270,7 @@ public class ITestProvidedImplementation {
       cluster = new MiniDFSCluster.Builder(conf)
           .format(doFormat)
           .manageNameDfsDirs(doFormat)
+          .manageDataDfsDirs(manageDfsDataDir)
           .numDataNodes(numDatanodes)
           .racks(racks)
           .build();
@@ -274,7 +286,7 @@ public class ITestProvidedImplementation {
     ImageWriter writer = createImage(new RandomTreeWalk(seed), nnDirPath, FixedBlockResolver.class);
     startCluster(nnDirPath, 0,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK}, null,
-        false, writer);
+        false);
 
     FileSystem fs = cluster.getFileSystem();
     for (TreePath e : new RandomTreeWalk(seed)) {
@@ -303,7 +315,7 @@ public class ITestProvidedImplementation {
     // 1 datanode PROVIDED, 9 DISK
     startCluster(nnDirPath, numDatanodes,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK}, null,
-        false, writer);
+        false);
     long diskCapacity = 1000;
     // set the DISK capacity for testing
     for (DataNode dn: cluster.getDataNodes()) {
@@ -386,7 +398,7 @@ public class ITestProvidedImplementation {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false, writer);
+        false);
     // wait for the replication to finish
     Thread.sleep(50000);
 
@@ -542,7 +554,7 @@ public class ITestProvidedImplementation {
             new StorageType[]{
                     StorageType.PROVIDED, StorageType.DISK},
             null,
-            false, writer);
+            false);
     setAndUnsetReplication("/" + filePrefix + (numFiles - 1) + fileSuffix, (short)4);
   }
 
@@ -557,7 +569,9 @@ public class ITestProvidedImplementation {
             file, newReplication, 1000000);
     DFSClient client = new DFSClient(new InetSocketAddress("localhost",
             cluster.getNameNodePort()), cluster.getConfiguration(0));
+
     getAndCheckBlockLocations(client, filename, baseFileLen, 1, newReplication);
+
 
     // set the replication back to 1
     //newReplication = 1;
@@ -582,7 +596,7 @@ public class ITestProvidedImplementation {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false, writer);
+        false);
 
     DataNode providedDatanode1 = cluster.getDataNodes().get(0);
     DataNode providedDatanode2 = cluster.getDataNodes().get(1);
@@ -654,7 +668,7 @@ public class ITestProvidedImplementation {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false, writer);
+        false);
 
     DataNode providedDatanode = cluster.getDataNodes().get(0);
     DatanodeStorageInfo providedDNInfo = getProvidedDatanodeStorageInfo();
@@ -692,7 +706,7 @@ public class ITestProvidedImplementation {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false, writer);
+        false);
 
     verifyFileLocation(numFiles - 1, 2);
     cluster.restartNameNodes();
@@ -734,7 +748,7 @@ public class ITestProvidedImplementation {
         new StorageType[][] {
             {StorageType.PROVIDED, StorageType.DISK},
             {StorageType.DISK}},
-        false, writer);
+        false);
     NameNode nn = cluster.getNameNode();
     assertEquals(clusterID, nn.getNamesystem().getClusterId());
   }
@@ -750,7 +764,7 @@ public class ITestProvidedImplementation {
         new StorageType[]{
             StorageType.PROVIDED, StorageType.DISK},
         null,
-        false, writer);
+        false);
     int expectedLocations = 4;
     for (int i = 0; i < numFiles; i++) {
       verifyFileLocation(i, expectedLocations);
@@ -784,7 +798,7 @@ public class ITestProvidedImplementation {
         new StorageType[]{
             StorageType.PROVIDED, StorageType.DISK},
         null,
-        false, writer);
+        false);
 
     int expectedLocations = 4;
     for (int i = 0; i < numFiles; i++) {
@@ -863,7 +877,7 @@ public class ITestProvidedImplementation {
         FixedBlockResolver.class);
     startCluster(nnDirPath, 3,
         new StorageType[] {StorageType.PROVIDED, StorageType.DISK},
-        null, false, writer);
+        null, false);
 
     int fileIndex = numFiles - 1;
 
@@ -940,7 +954,7 @@ public class ITestProvidedImplementation {
       conf.set(DFS_BLOCK_REPLICATOR_CLASSNAME_KEY, packageName + "." + policy);
       startCluster(nnDirPath, racks.length,
           new StorageType[]{StorageType.PROVIDED, StorageType.DISK},
-          null, false, racks, writer);
+          null, false, racks);
       verifyFileSystemContents();
       // wait for the replication to finish
       Thread.sleep(100000);
@@ -974,7 +988,6 @@ public class ITestProvidedImplementation {
         e.printStackTrace();
       }
     }
-    conf.set("hdfs.namenode.block.provider.id", "PROVIDED-dn");
     RunFs2img runner = new RunFs2img();
     runner.run(null, conf);
     startCluster(nnDirPath, 3, null,
@@ -1015,30 +1028,22 @@ public class ITestProvidedImplementation {
     int replication = 4;
 
     String bucket = "s3a://provided-test-ireland/";
- //   createFile(filename);
+    //createFile(filename);
     createImage(new FSTreeWalk(new Path(bucket), conf), nnDirPath, // TODO: GABRIEL - replication does not work with file from s3
             FixedBlockResolver.class);
 
-    startCluster(nnDirPath, 10,
+    mainStartCluster(nnDirPath, 10,
             new StorageType[]{StorageType.PROVIDED, StorageType.DISK}, null,
-            false, null);
+            false, false,null);
 
     DataNode providedDatanode = cluster.getDataNodes().get(0);
-    DatanodeStorageInfo providedDNInfo = getProvidedDatanodeStorageInfo();
-    int initialBRCount = providedDNInfo.getBlockReportCount();
-    FSNamesystem namesystem = cluster.getNameNode().getNamesystem();
-    DatanodeManager dnm = namesystem.getBlockManager().getDatanodeManager();
-    DatanodeStatistics dnStats = dnm.getDatanodeStatistics();
-    DatanodeDescriptor dnDesc = getDatanodeDescriptor(dnm, 0);
+    if(providedDatanode.getDatanodeUuid() != null)
+      conf.set("hdfs.namenode.block.provider.id", providedDatanode.getDatanodeUuid());
 
     setAndUnsetReplication("/" + filename, (short) replication);
-
-    //DFSClient client = new DFSClient(new InetSocketAddress("localhost",
-    //        cluster.getNameNodePort()), cluster.getConfiguration(0));
-    //getAndCheckBlockLocations(client, "/" + filename, baseFileLen, 1, 1);
   }
 
-  private File createFile(String filename) {
+  private File createFile(String filename, String toWrite) {
     File newFile = new File(
             new Path(providedPath, filename).toUri());
     if(!newFile.exists()) {
@@ -1047,9 +1052,7 @@ public class ITestProvidedImplementation {
         newFile.createNewFile();
         Writer writer = new OutputStreamWriter(
                 new FileOutputStream(newFile.getAbsolutePath()), "utf-8");
-        for(int j=0; j < baseFileLen; j++) {
-          writer.write("0");
-        }
+        writer.write(toWrite);
         writer.flush();
         writer.close();
         providedDataSize += newFile.length();
@@ -1060,7 +1063,7 @@ public class ITestProvidedImplementation {
     return newFile;
   }
 
-  @Ignore // only works if configured s3 credentials in file
+  //@Ignore // only works if configured s3 credentials in file
   @Test
   public void testProvidedReplicaReadFromS3() throws IOException {
     final String BASE_DIR = "/";
@@ -1069,25 +1072,21 @@ public class ITestProvidedImplementation {
     // length of each provided block.
     final long BLK_LEN = 128 * 1024L;
 
-    // setup aws credentials
-    S3Util.setSystemPropertiesS3Credentials();
-
-    AmazonS3Client s3 = new AmazonS3Client();
-    s3.setRegion(Region.getRegion(Regions.EU_WEST_1));
-
     String bucketName = "provided-test-ireland";
-    String key = "testS3.dat";
-    File providedFile = createFile(key);
+    String filename = "testS3.dat";
+    String toWrite = "Hello from hops!";
+    File providedFile = createFile(filename, toWrite);
 
+    AmazonS3Client s3 = setupS3();
     URI bucketUri = null;
     try {
-      bucketUri = new URI("s3a://"+bucketName+"/"+key);
+      bucketUri = new URI("s3a://"+bucketName+"/"+filename);
     } catch (URISyntaxException e) {
       e.printStackTrace();
     }
 
     S3Util util = new S3Util(s3);
-    util.uploadFile(bucketName, key, providedFile);
+    util.uploadFile(bucketName, filename, providedFile);
 
     List<ProvidedReplica> replicas = new ArrayList<ProvidedReplica>();
     int numReplicas = 1;
@@ -1103,7 +1102,7 @@ public class ITestProvidedImplementation {
 
     // Get an object and print its contents.
     System.out.println("Downloading an object");
-    S3Object fullObject = s3.getObject(new GetObjectRequest(bucketName, key));
+    S3Object fullObject = s3.getObject(new GetObjectRequest(bucketName, filename));
     System.out.println("Content-Type: " + fullObject.getObjectMetadata().getContentType());
     System.out.println("Content: ");
 
@@ -1131,7 +1130,7 @@ public class ITestProvidedImplementation {
     LOG.info("All replica contents verified");
 
     providedFile.delete();
-    s3.deleteObject(bucketName, key);
+    s3.deleteObject(bucketName, filename);
 
     // the block data should no longer be found!
     for (ProvidedReplica replica : replicas) {
@@ -1139,4 +1138,71 @@ public class ITestProvidedImplementation {
     }
   }
 
+  //@Ignore // only works if credential files is set up
+  @Test
+  public void testDatanodeReadFromS3() throws Exception {
+    String bucketName = "provided-test-ireland";
+    String filename = "testS3.dat";
+    String toWrite = "This is a test file";
+    File providedFile = createFile(filename, toWrite);
+
+    AmazonS3Client s3 = setupS3();
+    S3Util util = new S3Util(s3);
+    util.uploadFile(bucketName, filename, providedFile);
+
+    createImage(new FSTreeWalk(new Path(BUCKET_NAME), conf), nnDirPath,
+            FixedBlockResolver.class);
+    mainStartCluster(nnDirPath, 3,
+            new StorageType[]{StorageType.PROVIDED, StorageType.DISK}, null,
+            false, false, null);
+
+    DataNode providedDatanode = cluster.getDataNodes().get(0);
+    if(providedDatanode.getDatanodeUuid() != null) {
+      conf.set("hdfs.namenode.block.provider.id", providedDatanode.getDatanodeUuid());
+    }
+    DFSClient client = new DFSClient(new InetSocketAddress("localhost",
+            cluster.getNameNodePort()), cluster.getConfiguration(0));
+
+   getAndCheckBlockLocations(client, "/"+ filename, baseFileLen, 1, 1);
+
+   LocatedBlocks locatedBlocks = client.getLocatedBlocks(
+            "/"+ filename, 0, baseFileLen);
+
+    Assert.assertNotNull(locatedBlocks);
+
+    // read from file
+    FileSystem fileSystem = FileSystem.get(conf);
+    Path path = new Path("/"+filename);
+    if (!fileSystem.exists(path)) {
+      LOG.error("File " + path + "does not exists");
+      return;
+    }
+    FSDataInputStream in = fileSystem.open(path);
+    int numBytes = 0;
+    StringBuilder sb = new StringBuilder();
+    while ((numBytes = in.read())> 0) {
+      sb.append((char) numBytes);
+    }
+    LOG.info("Successfully read '" + sb.toString() + "'. from " + path);
+    in.close();
+    fileSystem.close();
+  }
+
+  private AmazonS3Client setupS3() {
+    conf.set(DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY,
+    "[DISK]//${hadoop.tmp.dir}/dfs/data,[PROVIDED]"+BUCKET_NAME);
+
+    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR_PROVIDED, BUCKET_NAME); // this is the bucket to use
+
+    // load access keys from local file
+    final String credFileName =
+            "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/src/test/java/org/apache/hadoop/hdfs/server/namenode/awsCred.txt";
+    // setup aws credentials
+    S3Util.setSystemPropertiesS3Credentials(credFileName);
+
+    AmazonS3Client s3 = new AmazonS3Client();
+    s3.setRegion(Region.getRegion(Regions.EU_WEST_1));
+
+    return s3;
+  }
 }

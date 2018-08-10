@@ -76,11 +76,8 @@ public class S3Util {
     return b;
   }
 
-  public static void setSystemPropertiesS3Credentials() {
-    // load access keys from file
-    final String credFileName =
-            "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/src/test/java/org/apache/hadoop/hdfs/server/namenode/awsCred.txt";
-    try {
+  public static void setSystemPropertiesS3Credentials(String credFileName) {
+   try {
       // set up new properties object from file
       FileInputStream propFile =
               new FileInputStream(credFileName);
