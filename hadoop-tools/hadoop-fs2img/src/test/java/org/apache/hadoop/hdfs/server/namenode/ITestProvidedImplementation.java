@@ -97,6 +97,14 @@ public class ITestProvidedImplementation {
   private final String BUCKET_NAME = "provided-test-2";
   private final String BUCKET_PATH =  "s3a://"+BUCKET_NAME+"/";
 
+  public ITestProvidedImplementation() {
+    try {
+      setSeed();
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
   @Before
   public void setSeed() throws Exception {
     if (fBASE.exists() && !FileUtil.fullyDelete(fBASE)) {
@@ -225,15 +233,15 @@ public class ITestProvidedImplementation {
     }
   }
 
-  void startCluster(Path nspath, int numDatanodes,
-                    StorageType[] storageTypes,
-                    StorageType[][] storageTypesPerDatanode,
-                    boolean doFormat) throws IOException {
-    startCluster(nspath, numDatanodes, storageTypes, storageTypesPerDatanode,
+  MiniDFSCluster startCluster(Path nspath, int numDatanodes,
+                              StorageType[] storageTypes,
+                              StorageType[][] storageTypesPerDatanode,
+                              boolean doFormat) throws IOException {
+    return startCluster(nspath, numDatanodes, storageTypes, storageTypesPerDatanode,
         doFormat, null);
   }
 
-  void startCluster(Path nspath, int numDatanodes,
+   MiniDFSCluster startCluster(Path nspath, int numDatanodes,
                     StorageType[] storageTypes,
                     StorageType[][] storageTypesPerDatanode,
                     boolean doFormat, String[] racks) throws IOException {
@@ -265,6 +273,8 @@ public class ITestProvidedImplementation {
               .build();
     }
     cluster.waitActive();
+
+    return cluster;
   }
 
   @Test(timeout=20000)
@@ -478,7 +488,7 @@ public class ITestProvidedImplementation {
     }
   }
 
-  private BlockLocation[] createFile(Path path, short replication,
+  public BlockLocation[] createFile(Path path, short replication,
                                      long fileLen, long blockLen) throws IOException {
     FileSystem fs = cluster.getFileSystem();
     // create a file that is not provided
@@ -1080,7 +1090,7 @@ public class ITestProvidedImplementation {
     String toWrite = "Hello from hops!";
     File providedFile = createFile(fileName, toWrite);
 
-    AmazonS3Client s3 = S3Util.setupS3(conf, BUCKET_NAME);
+    AmazonS3Client s3 = S3Util.setupS3(conf, BUCKET_PATH);
     s3.putObject(BUCKET_NAME, fileName, providedFile);
     URI bucketUri = null;
     try {
@@ -1154,15 +1164,11 @@ public class ITestProvidedImplementation {
 
    getAndCheckBlockLocations(client, baseDir + filename, baseFileLen, 1, 3);
 
-   LocatedBlocks locatedBlocks = client.getLocatedBlocks(
-            baseDir + filename, 0, baseFileLen);
-    Assert.assertNotNull(locatedBlocks);
-
     String read = readFromFile(cluster.getFileSystem(), baseDir + filename);
     Assert.assertEquals(read, toWrite);
   }
 
-  private String readFromFile(FileSystem fileSystem, String filePath) throws IOException {
+  public String readFromFile(FileSystem fileSystem, String filePath) throws IOException {
     Path path = new Path(filePath);
     Assert.assertTrue(filePath + " does not exist in filesystem " + fileSystem.toString(), fileSystem.exists(path));
 
@@ -1179,5 +1185,13 @@ public class ITestProvidedImplementation {
     fileSystem.close();
 
     return str;
+  }
+
+  public Configuration getConf() {
+    return conf;
+  }
+
+  public String getBpid() {
+    return bpid;
   }
 }

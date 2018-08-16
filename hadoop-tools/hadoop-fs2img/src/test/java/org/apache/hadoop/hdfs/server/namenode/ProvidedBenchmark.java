@@ -1,49 +1,36 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
-import com.amazonaws.regions.Region;
-import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.Bucket;
-import com.google.caliper.Runner;
-import io.hops.metadata.HdfsStorageFactory;
-import org.apache.commons.logging.impl.Log4JLogger;
+import com.google.caliper.runner.CaliperMain;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.DFSTestUtil;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfo;
-import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
-import org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap;
-import org.apache.log4j.Level;
-import org.junit.Before;
-import org.junit.Rule;
+import org.apache.hadoop.hdfs.*;
+import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.junit.*;
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Random;
-
-import com.google.caliper.SimpleBenchmark;
-import static org.apache.hadoop.hdfs.server.common.blockaliasmap.impl.TextFileRegionAliasMap.fileNameFromBlockPoolID;
+import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 /**
  * Created by gabriel on 2018-08-08.
  */
-public class ProvidedBenchmark extends SimpleBenchmark {
+
+//@VmOptions("-XX:-TieredCompilation")
+public class ProvidedBenchmark {
+
 
   public static void main(String[] args) throws Exception {
-    new Runner().run(
-            // These are the command line arguments for Runner.
-           // "--trials", "10",
-            ProvidedBenchmark.class.getName()
-    );
+    String[] as = {"--trials", "2"};
+    CaliperMain.main(ProvidedBenchmark.class, as);
   }
 
   @Rule
@@ -51,139 +38,228 @@ public class ProvidedBenchmark extends SimpleBenchmark {
   public static final Logger LOG =
           LoggerFactory.getLogger(ProvidedBenchmark.class);
 
-  private final Random r = new Random();
   private final File fBASE = new File(MiniDFSCluster.getBaseDirectory());
   private final Path pBASE = new Path(fBASE.toURI().toString());
-  private final Path providedPath = new Path(pBASE, "providedDir"); // folder for created provided files
   private final Path nnDirPath = new Path(pBASE, "nnDir"); // folder for .csv file
-  private final String singleUser = "usr1";
-  private final String singleGroup = "grp1";
-  private String bpid = "";
   private Configuration conf;
   private MiniDFSCluster cluster;
-
+  private ITestProvidedImplementation test;
   private AmazonS3 s3;
   private S3Util s3Util;
-  private final String BUCKET_NAME = "bla2-bucket"; // provided-test-ireland
-  private Bucket bucket = null;
+  private final String BUCKET_NAME = "benchmark-provided-bucket"; //
+  private final String BUCKET_PATH = "s3a://" + BUCKET_NAME + "/";
+  private final String RESULTS_DIR = "/home/gabriel/Documents/hops/benchmarks";
 
   public ProvidedBenchmark() {
     try {
-      s3Util = new S3Util(s3);
       setupConfig();
-      setupAws();
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
-  private void setupAws() {
-    // load access keys from local file
-    final String credFileName =
-            "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/src/test/java/org/apache/hadoop/hdfs/server/namenode/awsCred.txt";
 
-    S3Util.setSystemPropertiesS3Credentials(credFileName);
-
-    s3 = new AmazonS3Client();
-    s3.setRegion(Region.getRegion(Regions.EU_WEST_1));
-    bucket = s3Util.createBucket(BUCKET_NAME);
-    if (bucket == null) {
-      System.out.println("Error creating bucket!\n");
-    } else {
-      System.out.println("Done!\n");
-    }
-    //createUploadFiles();
-  }
-
-  private void createUploadFiles() {
-    int files = 1;
-    for (int i = 0; i < files; i++) {
-      String filename = "test-file-" + i + ".txt";
-      File file = s3Util.createFile(filename);
-      s3Util.uploadFile(BUCKET_NAME, filename, file);
-    }
-  }
 
   @Before
   public void setupConfig() throws Exception {
-    if (fBASE.exists() && !FileUtil.fullyDelete(fBASE)) {
-      throw new IOException("Could not fully delete " + fBASE);
+    test = new ITestProvidedImplementation();
+    conf = test.getConf();
+
+    s3 = S3Util.setupS3(conf, BUCKET_PATH);
+    s3Util = new S3Util(s3);
+
+    //s3Util.createBucket(BUCKET_NAME);
+  }
+
+  @After
+  public void shutdown() throws Exception {
+    try {
+      if (cluster != null) {
+        cluster.shutdown();
+      }
+    } finally {
+      cluster = null;
     }
-    ((Log4JLogger) NameNode.blockStateChangeLog).getLogger().setLevel(Level.ALL);
-    long seed = r.nextLong();
-    r.setSeed(seed);
-    System.out.println(name.getMethodName() + " seed: " + seed);
-    conf = new HdfsConfiguration();
-    conf.set(SingleUGIResolver.USER, singleUser);
-    conf.set(SingleUGIResolver.GROUP, singleGroup);
+  }
 
-    conf.set(DFSConfigKeys.DFS_PROVIDER_STORAGEUUID,
-            DFSConfigKeys.DFS_PROVIDER_STORAGEUUID_DEFAULT);
-    // GABRIEL - setting DFS_NAMENODE_PROVIDED_ENABLED to true will create a default PROVIDED storage and datanode
-    conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_PROVIDED_ENABLED, true);
+  @Test
+  public void stripFile() {
+    String fileName = "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/benchmark--976230672.txt";
+    List<String> list = new ArrayList<>();
+    try (Stream<String> stream = Files.lines(Paths.get(fileName))) {
+      list = stream
+              .map(line -> line.split("=")[1]
+                      .replace(" ms", "")
+              )
+              .collect(Collectors.toList());
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    list.forEach(System.out::println);
 
-    conf.setClass(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_CLASS,
-            TextFileRegionAliasMap.class, BlockAliasMap.class);
-    conf.set(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_TEXT_WRITE_DIR,
-            nnDirPath.toString());
-    conf.set(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_TEXT_READ_FILE,
-            new Path(nnDirPath, fileNameFromBlockPoolID(bpid)).toString());
-    conf.set(DFSConfigKeys.DFS_PROVIDED_ALIASMAP_TEXT_DELIMITER, ",");
+  }
 
-    //conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR_PROVIDED,
-    //        new File(providedPath.toUri()).toString());
+  // 2 .except to see no difference in time regarding file size
+  @Test
+  public void benchmarkFiles() throws Exception {
+    int files = 100;
+    int mb = 1048576;
+    int size = mb;
+    int runsPerTest = 10;
+    String resultFile = "benchmarkFiles-" + new Date() + ".txt";
+    BufferedWriter writer = new BufferedWriter(new FileWriter(resultFile, true));
 
-    HdfsStorageFactory.setConfiguration(conf);
-    HdfsStorageFactory.formatStorage();
-    DFSTestUtil.formatNameNode(conf);
+    String[] filenames = new String[files + 1];
+    for (int i = 1; i < files + 1; i++) {
+      size *= 2;
+      String filename;
+      filename = "test-file-" + i + ".txt";
+      File file = s3Util.createLocalFile(filename, size);
+      s3Util.uploadFile(BUCKET_NAME, filename, file);
+      filenames[i] = filename;
+
+      scanBucket(3); // warmup
+
+      long totalRunTime = 0L;
+      LOG.info("-------------------------start test " + i + " ---------------------------------");
+      for (int j = 0; j < runsPerTest; j++) {
+        LOG.info("Benchmarking scan of " + BUCKET_NAME + " with files " + Arrays.toString(filenames));
+        long startTime = System.currentTimeMillis();
+        scanBucket(1);
+        long endTime = System.currentTimeMillis() - startTime;
+        LOG.info("Test took: " + endTime + " ms");
+        totalRunTime += endTime;
+      }
+      String result = i + " = " + totalRunTime / runsPerTest + "  ms";
+      saveResults(writer, result);
+      LOG.info("-------------------------saved results to " + resultFile + "----------------------------------");
+
+      s3.deleteObject(BUCKET_NAME, filename);
+      Thread.sleep(3000); // sleep to make sure it is deleted
+    }
+
+    writer.close();
+  }
+
+  public void saveResults(BufferedWriter writer, String result) throws IOException {
+    writer.append(result);
+    writer.append('\n');
+    writer.flush();
+  }
+  @Test
+  public void benchmarkReplication() throws Exception {
+    int replication = 4;
+
+    String remoteFilename = "remoteFile.txt";
+    int baseFileLen = 1024;
+    String baseDir = "/";
+
+    File file = s3Util.createLocalFile(remoteFilename, baseFileLen);
+    s3Util.uploadFile(BUCKET_NAME, remoteFilename, file);
+    s3.putObject(BUCKET_NAME, remoteFilename, file);
+    file.delete();
+
+    test.createImage(new FSTreeWalk(new Path(BUCKET_PATH), conf), nnDirPath, FixedBlockResolver.class);
+
+    MiniDFSCluster cluster = test.startCluster(nnDirPath, 2,
+            null,
+            new StorageType[][]{
+                    {StorageType.PROVIDED, StorageType.DISK},
+                    {StorageType.DISK}
+            },
+            false, null);
+
+    DFSClient client = new DFSClient(new InetSocketAddress("localhost",
+            cluster.getNameNodePort()), cluster.getConfiguration(0));
+
+    String localFilename = "/local.txt";
+    test.createFile(new Path(localFilename), (short) 1, baseFileLen, baseFileLen);
+
+    String resultFile = "benchmarkReplication-" + new Date().getTime() + ".txt";
+    BufferedWriter writer = new BufferedWriter(new FileWriter(new File(RESULTS_DIR, resultFile), true));
+    int tries = 10;
+    writer.write(timeGetLocatedBlocks(client, localFilename, tries));
+    writer.write(timeGetLocatedBlocks(client, "/"+remoteFilename, tries));
+    writer.close();
+
+
+//    List<LocatedBlock> locatedBlocks = client.getLocatedBlocks(baseDir + filename, 0, baseFileLen).getLocatedBlocks();
+//    ArrayList<DataNode> dns = cluster.getDataNodes();
+
+  /*  int tries = 1;
+    for (int i = 0; i < locatedBlocks.size(); i++) {
+      LocatedBlock block = locatedBlocks.get(i);
+      StorageType[] storageTypes = block.getStorageTypes();
+      DatanodeInfo[] infos = block.getLocations();
+
+      for (int j = 0; j < infos.length; j++) {
+        DatanodeInfoWithStorage dn = (DatanodeInfoWithStorage) infos[j];
+        if(dn.getStorageType().equals(StorageType.PROVIDED)) {
+          DFSInputStream inputStream = client.open(filename);
+          //inputStream.read
+        }
+      }
+      if (storageTypes[i].equals(StorageType.PROVIDED)) {
+
+      }
+      Assert.assertNotNull(locatedBlocks);
+    }*/
+   // String read = test.readFromFile(cluster.getFileSystem(), "/" + filename);
+   // Assert.assertEquals(toWrite, read);
+  }
+
+  private String timeGetLocatedBlocks(DFSClient client, String filename, int tries) throws IOException {
+    long totTime = 0;
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < tries; i++) {
+      long startTime = System.currentTimeMillis();
+      LocatedBlocks locatedBlocks = client.getLocatedBlocks(filename, 0, filename.length());
+      long endTime = System.currentTimeMillis() - startTime;
+      totTime += endTime;
+
+      sb.append("read ").append(filename).append(" from ").append(locatedBlocks.get(0).getLocations()[0].getDatanodeUuid())
+              .append(Arrays.toString(locatedBlocks.get(0).getLocations())).append("\n");
+      sb.append("run ").append(i).append(" took ").append(endTime).append(" ms").append("\n");
+    }
+    sb.append(filename).append(" avg ms time of ").append(tries).append(" tries : ").append(totTime / tries).append("\n").append("\n");
+    LOG.info(sb.toString());
+
+    return sb.toString();
+  }
+
+
+  @Test
+  public void benchmarkBytes() {
+
+  }
+
+  @Test
+  public void benchmarkHierarchy() {
+
+  }
+
+  @Test
+  public void uploadFileToS3() {
+    int fileID = 2;
+    int size = 1;
+    String filename;
+    filename = "test-file-" + fileID + ".txt";
+    File file = s3Util.createLocalFile(filename, size);
+    s3Util.uploadFile(BUCKET_NAME, filename, file);
   }
 
   // "time" methods are benchmarked
-  public void timeGetFileFromS3(int reps) throws Exception {
+  //@Benchmark
+  public void getFileFromS3(int reps) throws Exception {
     for (int i = 0; i < reps; i++) {
-      createImage(new FSTreeWalk(new Path("s3a://" + BUCKET_NAME +"/"), conf), nnDirPath,
+      test.createImage(new FSTreeWalk(new Path(BUCKET_PATH), conf), nnDirPath,
               FixedBlockResolver.class);
     }
   }
 
-  ImageWriter createImage(TreeWalk t, Path out,
-                          Class<? extends BlockResolver> blockIdsClass) throws Exception {
-    return createImage(t, out, blockIdsClass, "", TextFileRegionAliasMap.class);
-  }
-
-  ImageWriter createImage(TreeWalk t, Path out,
-                          Class<? extends BlockResolver> blockIdsClass, String clusterID,
-                          Class<? extends BlockAliasMap> aliasMapClass) throws Exception {
-    ImageWriter.Options opts = ImageWriter.defaults();
-    opts.setConf(conf);
-    opts.output(out.toString())
-            .blocks(aliasMapClass)
-            .blockIds(blockIdsClass)
-            .clusterID(clusterID)
-            .blockPoolID(bpid);
-
-    ArrayList<INode> inodes = new ArrayList<>();
-    ArrayList<BlockInfo> blocks = new ArrayList<>();
-
-    try (ImageWriter w = new ImageWriter(opts)) {
-      for (TreePath e : t) {
-        INode inode = w.accept(e);
-        if (inode != null) {
-          inodes.add(inode);
-          if (inode instanceof INodeFile) {
-            blocks.addAll(e.getBlockInfos());
-          }
-        }
-      }
-      LOG.info("found "+ inodes.size()+" inodes and " + blocks.size() + " blocks from fs2img");
-      w.close();
-
-      w.persistBlocks(blocks); // make sure to start cluster before persisting
-      w.persistInodesAndUsers(inodes);
-      return w;
-    } catch (IOException e) {
-      e.printStackTrace();
-      throw e;
-    }
+  public void scanBucket(int reps) throws Exception {
+    //  for (int i = 0; i < reps; i++) {
+    test.createImage(new FSTreeWalk(new Path(BUCKET_PATH), conf), nnDirPath,
+            FixedBlockResolver.class);
+    //  }
   }
 }
-
