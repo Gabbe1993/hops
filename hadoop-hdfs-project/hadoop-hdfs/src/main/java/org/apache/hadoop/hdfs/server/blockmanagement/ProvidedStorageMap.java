@@ -181,7 +181,7 @@ public class ProvidedStorageMap {
     return providedStorageInfo.getCapacity();
   }
 
-  public void updateStorage(DatanodeDescriptor node, DatanodeStorage storage) {
+  public void updateStorage(DatanodeDescriptor node, DatanodeStorage storage) throws IOException {
     if (isProvidedStorage(storage.getStorageID())) {
       if (StorageType.PROVIDED.equals(storage.getStorageType())) {
         node.injectStorage(providedStorageInfo);
@@ -190,6 +190,7 @@ public class ProvidedStorageMap {
                 storage, node);
       }
     }
+    node.updateStorage(storage);   // TODO: GABRIEL - update node storage here?
   }
 
   private boolean isProvidedStorage(String dnStorageId) {
@@ -307,7 +308,7 @@ public class ProvidedStorageMap {
     private final List<DatanodeDescriptor> dnR = new ArrayList<>();
     public final static String NETWORK_LOCATION = "/REMOTE";
     public final static String NAME = "PROVIDED";
-    private final static String providedDnUuid = "PROVIDED-" + UUID.randomUUID().toString();
+    private final static String providedDnUuid = "PROVIDED-dn"; //+ UUID.randomUUID().toString();
 
     ProvidedDescriptor() throws IOException {
       super(new StorageMap(false),
@@ -334,7 +335,7 @@ public class ProvidedStorageMap {
       DatanodeStorageInfo storage = new ProvidedDatanodeStorageInfo(this, ds);
       storage.setHeartbeatedSinceFailover(true);
       storageMap.put(storage.getStorageID(), storage);
-      try {
+     try {
         globalStorageMap.updateStorage(storage);
       } catch (IOException e) {
         e.printStackTrace();

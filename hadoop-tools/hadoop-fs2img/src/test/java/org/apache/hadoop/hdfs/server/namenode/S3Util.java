@@ -1,14 +1,23 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.mortbay.log.Log;
 
 import java.io.*;
 import java.util.List;
 import java.util.Properties;
+
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY;
 
 /**
  * Created by gabriel on 2018-08-09.
@@ -21,11 +30,13 @@ public class S3Util {
     this.s3 = s3;
   }
 
-  public File createFile(String filename) {
+  public File createLocalFile(String filename, int size) {
+    Log.info("Creating file: " + filename + " with size: " + size);
     try {
       PrintWriter writer = new PrintWriter(filename, "UTF-8");
-      writer.println("The first line");
-      writer.println("The second line");
+      for(int j=0; j < size; j++) {
+        writer.write("0");
+      }
       writer.close();
     } catch (FileNotFoundException | UnsupportedEncodingException e) {
       e.printStackTrace();
@@ -42,8 +53,8 @@ public class S3Util {
       metadata.addUserMetadata("x-amz-meta-title", "someTitle");
       metadata.setContentMD5(null);
       request.setMetadata(metadata);
-      s3.putObject(request);
       System.out.println("Success: uploaded file: " + file.getName() + " to bucket: " + bucketName);
+      s3.putObject(request);
     } catch (Exception e) {
       System.err.println("Failed: Could not upload: " + file.getName() + " to bucket: " + bucketName);
       e.printStackTrace();
@@ -74,6 +85,28 @@ public class S3Util {
       }
     }
     return b;
+  }
+
+
+  public static AmazonS3Client setupS3(Configuration conf, String bucketPath) {
+    Log.info("Setting up S3 environment");
+
+    conf.set(DFS_DATANODE_DATA_DIR_KEY,
+            "[DISK]//${hadoop.tmp.dir}/dfs/data,[PROVIDED]"+bucketPath);
+
+    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR_PROVIDED, bucketPath); // this is the bucket to use
+
+    // load access keys from local file
+    final String credFileName =
+            "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/src/test/java/org/apache/hadoop/hdfs/server/namenode/awsCred.txt";
+    // setup aws credentials
+    S3Util.setSystemPropertiesS3Credentials(credFileName);
+    Log.info("Loaded AWS credentials from file " + credFileName);
+
+    AmazonS3Client s3 = new AmazonS3Client();
+    s3.setRegion(Region.getRegion(Regions.EU_WEST_1));
+
+    return s3;
   }
 
   public static void setSystemPropertiesS3Credentials(String credFileName) {

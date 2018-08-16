@@ -872,18 +872,20 @@ public class MiniDFSCluster {
         break;
       }
       File dir;
-      if (storageTypes != null && storageTypes[j] == StorageType.PROVIDED) {
-        dir = getProvidedStorageDir(dnIndex, j);
+      String uri;
+      if (storageTypes[j] == StorageType.PROVIDED) {
+        uri = getProvidedStorageDir(dnIndex, j);
       } else {
         dir = getInstanceStorageDir(dnIndex, j);
-      }
-      dir.mkdirs();
-      if (!dir.isDirectory()) {
-        throw new IOException("Mkdirs failed to create directory for DataNode " + dir);
+        dir.mkdirs();
+        if (!dir.isDirectory()) {
+          throw new IOException("Mkdirs failed to create directory for DataNode " + dir);
+        }
+        uri = fileAsURI(dir).toString();
       }
       sb.append((j > 0 ? "," : "") + "[" +
           (storageTypes == null ? StorageType.DEFAULT : storageTypes[j]) +
-          "]" + fileAsURI(dir));
+          "]" + uri);
     }
     return sb.toString();
   }
@@ -1060,7 +1062,7 @@ public class MiniDFSCluster {
       }
       // Set up datanode address
       setupDatanodeAddress(dnConf, setupHostsFile, checkDataNodeAddrConfig);
-      if (manageDfsDirs) {
+      if (manageDfsDirs) { // GABRIEL - if manageDfsDirs = true we create a local dir with s3 name, if false we dont create any storages
         String dirs = makeDataNodeDirs(i, storageTypes == null ? null : storageTypes[i - curDatanodesNum]);
         dnConf.set(DFS_DATANODE_DATA_DIR_KEY, dirs);
         conf.set(DFS_DATANODE_DATA_DIR_KEY, dirs);
@@ -2131,12 +2133,12 @@ public class MiniDFSCluster {
    * @param dirIndex directory index
    * @return Storage directory
    */
-  public File getProvidedStorageDir(int dnIndex, int dirIndex) {
+  public String getProvidedStorageDir(int dnIndex, int dirIndex) {
     String base = conf.get(HDFS_MINIDFS_BASEDIR_PROVIDED, null);
     if (base == null) {
-      return getInstanceStorageDir(dnIndex, dirIndex);
+      return getInstanceStorageDir(dnIndex, dirIndex).toString();
     }
-    return new File(base);
+    return base;
   }
 
   /**
