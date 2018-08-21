@@ -94,7 +94,7 @@ public class ITestProvidedImplementation {
   private String bpid = "";
   private Configuration conf;
   private MiniDFSCluster cluster;
-  private final String BUCKET_NAME = "provided-test-2";
+  private final String BUCKET_NAME = "benchmark-provided-2";
   private final String BUCKET_PATH =  "s3a://"+BUCKET_NAME+"/";
 
   public ITestProvidedImplementation() {

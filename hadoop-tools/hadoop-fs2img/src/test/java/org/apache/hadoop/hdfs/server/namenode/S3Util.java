@@ -99,9 +99,14 @@ public class S3Util {
     // load access keys from local file
     final String credFileName =
             "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/src/test/java/org/apache/hadoop/hdfs/server/namenode/awsCred.txt";
-    // setup aws credentials
-    S3Util.setSystemPropertiesS3Credentials(credFileName);
-    Log.info("Loaded AWS credentials from file " + credFileName);
+
+    try {
+      // setup aws credentials
+      S3Util.setSystemPropertiesS3Credentials(credFileName);
+      Log.info("Loaded AWS credentials from file " + credFileName);
+    } catch (Exception e) {
+      System.err.println("could not load AWS credentials from file " + credFileName);
+    }
 
     AmazonS3Client s3 = new AmazonS3Client();
     s3.setRegion(Region.getRegion(Regions.EU_WEST_1));

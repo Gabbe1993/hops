@@ -232,7 +232,7 @@ public class ProvidedBenchmark {
     }
   }
 
-  private String timeReadFromFile(DFSClient client, FileSystem fileSystem, String filename, int length, int limit) throws IOException {
+  private String timeReadFromFile(DFSClient client, DistributedFileSystem fileSystem, String filename, int length, int limit) throws IOException {
     Path path = new Path(filename);
     Assert.assertTrue(filename + " does not exist in filesystem " + fileSystem.toString(), fileSystem.exists(path));
 
@@ -248,7 +248,7 @@ public class ProvidedBenchmark {
 
     byte[] buffer;
     long totTime = 0;
-    int tries = 2;
+    int tries = 3;
     for (int i = 0; i < tries; i++) {
       buffer = new byte[length];
       LOG.info("----------------------------start run "+i+"------------------------------------");
