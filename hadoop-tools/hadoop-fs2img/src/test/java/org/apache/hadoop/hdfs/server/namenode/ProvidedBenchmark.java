@@ -1,10 +1,11 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.google.caliper.runner.CaliperMain;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.*;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.junit.*;
 import org.junit.rules.TestName;
@@ -24,14 +25,7 @@ import java.util.stream.Stream;
  * Created by gabriel on 2018-08-08.
  */
 
-//@VmOptions("-XX:-TieredCompilation")
 public class ProvidedBenchmark {
-
-
-  public static void main(String[] args) throws Exception {
-    String[] as = {"--trials", "2"};
-    CaliperMain.main(ProvidedBenchmark.class, as);
-  }
 
   @Rule
   public TestName name = new TestName();
@@ -46,9 +40,9 @@ public class ProvidedBenchmark {
   private ITestProvidedImplementation test;
   private AmazonS3 s3;
   private S3Util s3Util;
-  private final String BUCKET_NAME = "benchmark-provided-bucket"; //
+  private final String BUCKET_NAME = "benchmark-provided-2"; //
   private final String BUCKET_PATH = "s3a://" + BUCKET_NAME + "/";
-  private final String RESULTS_DIR = "/home/gabriel/Documents/hops/benchmarks";
+  private String RESULTS_DIR = "/home/gabriel/Documents/hops/benchmarks";
 
   public ProvidedBenchmark() {
     try {
@@ -83,13 +77,15 @@ public class ProvidedBenchmark {
 
   @Test
   public void stripFile() {
-    String fileName = "/home/gabriel/Documents/hops/hadoop-tools/hadoop-fs2img/benchmark--976230672.txt";
+    String fileName = "/home/gabriel/Documents/hops/benchmarks/KB_benchmarkRead-Mon Aug 20 14:46:58 CEST 2018.txt";
     List<String> list = new ArrayList<>();
     try (Stream<String> stream = Files.lines(Paths.get(fileName))) {
       list = stream
-              .map(line -> line.split("=")[1]
-                      .replace(" ms", "")
+              .filter(line -> line.contains("took"))
+              .map(line -> line.split("took ")[1]
+                      //.replace(" ms", "")
               )
+              .filter(line -> Integer.parseInt(line) < 3000)
               .collect(Collectors.toList());
     } catch (IOException e) {
       e.printStackTrace();
@@ -146,17 +142,143 @@ public class ProvidedBenchmark {
     writer.flush();
   }
   @Test
-  public void benchmarkReplication() throws Exception {
-    int replication = 4;
+  public void calculateAvg() {
+    String fileName = "/home/gabriel/Documents/hops/benchmarks/SMALL-KB_benchmarkRead-Tue Aug 21 11:09:44 CEST 2018.txt";
+    List<String> avgs = new ArrayList<>();
+    List<String> list = new ArrayList<>();
+    try (Stream<String> stream = Files.lines(Paths.get(fileName))) {
+      list = stream
+              .filter(line -> line.contains("took") && !line.contains("reading"))
+              .map(line -> line.split("took ")[1]
+                      //.replace(" ms", "")
+              )
+              //.filter(a -> Integer.parseInt(a) < 1000)
+              .collect(Collectors.toList());
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    list.forEach(System.out::println);
+  }
 
-    String remoteFilename = "remoteFile.txt";
-    int baseFileLen = 1024;
+  @Test
+  public void benchmarkRead() throws Exception {
+    int replication = 4;
+    int limit = 0; // remove outliers over this ms
+
+    // GABRIEL - change before tests of small/med/big
+    String type = "BIG-MB_";
+    int baseFileLen = 1024 * 1024 * 100; // 1 kb * 1 mb * x
+
+    RESULTS_DIR = RESULTS_DIR + "/read";
+    String resultFile = type + "benchmarkRead-" + new Date() + ".txt";
+    BufferedWriter writer = new BufferedWriter(new FileWriter(new File(RESULTS_DIR, resultFile), true));
+
+    int tries = 10;
+    int start = 1; // number to start from
+    String remoteFilename;
     String baseDir = "/";
 
-    File file = s3Util.createLocalFile(remoteFilename, baseFileLen);
+    File file;
+    DFSClient client;
+    String diskFilename;
+    int fileLen;
+    try {
+      for (int i = start; i < tries+1; i++) {
+        remoteFilename = "remoteFile_" + i + ".txt";
+        fileLen = baseFileLen * i;
+        file = s3Util.createLocalFile(remoteFilename, fileLen);
     s3Util.uploadFile(BUCKET_NAME, remoteFilename, file);
-    s3.putObject(BUCKET_NAME, remoteFilename, file);
     file.delete();
+        Thread.sleep(3000);
+
+        test.createImage(new FSTreeWalk(new Path(BUCKET_PATH), conf),
+                nnDirPath, FixedBlockResolver.class);
+
+        cluster = test.startCluster(nnDirPath, 2,
+                null,
+                new StorageType[][]{
+                        {StorageType.PROVIDED, StorageType.DISK},
+                        {StorageType.DISK}
+                },
+                false, null);
+        client = new DFSClient(new InetSocketAddress("localhost",
+                cluster.getNameNodePort()), cluster.getConfiguration(0));
+
+        diskFilename = "/local_" + i + ".txt";
+        test.createFile(new Path(diskFilename), (short) 1, fileLen, fileLen);
+        Thread.sleep(3000);
+
+        // warmup
+        timeReadFromFile(client, cluster.getFileSystem(), diskFilename, fileLen, 0);
+        timeReadFromFile(client, cluster.getFileSystem(), baseDir + remoteFilename, fileLen, 0);
+
+        writer.write(
+                timeReadFromFile(client, cluster.getFileSystem(), diskFilename, fileLen, limit)
+        );
+        writer.write(
+                timeReadFromFile(client, cluster.getFileSystem(), baseDir + remoteFilename, fileLen, limit)
+        );
+        writer.flush();
+
+        cluster.shutdown();
+        System.gc();
+        Thread.sleep(3000);
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      writer.close();
+      cluster.shutdown();
+    }
+  }
+
+  private String timeReadFromFile(DFSClient client, FileSystem fileSystem, String filename, int length, int limit) throws IOException {
+    Path path = new Path(filename);
+    Assert.assertTrue(filename + " does not exist in filesystem " + fileSystem.toString(), fileSystem.exists(path));
+
+    FSDataInputStream in = fileSystem.open(path);
+    StringBuilder sb = new StringBuilder();
+    LocatedBlocks lbks = client.getLocatedBlocks(filename, 0, filename.length());
+    DatanodeInfo[] infos = lbks.get(0).getLocations();
+    sb.append("reading ").append(filename).append(" ").append(length)
+            .append(" b ").append(" from ")
+            .append(fileSystem.getUri() + ", ")
+            .append(infos[0].getDatanodeUuid())
+            .append(Arrays.toString(infos)).append("\n");
+
+    byte[] buffer;
+    long totTime = 0;
+    int tries = 2;
+    for (int i = 0; i < tries; i++) {
+      buffer = new byte[length];
+      LOG.info("----------------------------start run "+i+"------------------------------------");
+      long startTime = System.currentTimeMillis();
+
+      in.readFully(0, buffer, 0, length);
+
+      long endTime = System.currentTimeMillis() - startTime;
+      // remove outliers
+      //if(endTime < limit) {
+        totTime += endTime;
+      //}
+      LOG.info("----------------------------finish run "+i+"------------------------------------");
+      sb.append(endTime).append("\n");
+    }
+    in.close();
+    fileSystem.close();
+
+    sb.append(filename).append(" avg ").append(totTime / tries).append("\n").append("\n");
+    String str = sb.toString();
+    LOG.info(str);
+
+    return str;
+  }
+
+  @Test
+  public void testTimeGetLocatedBlocks() throws Exception {
+    String filename = "getLocatedBlocks.txt";
+    File file = s3Util.createLocalFile(filename, 1024);
+    s3Util.uploadFile(BUCKET_NAME, filename, file);
 
     test.createImage(new FSTreeWalk(new Path(BUCKET_PATH), conf), nnDirPath, FixedBlockResolver.class);
 
@@ -171,54 +293,27 @@ public class ProvidedBenchmark {
     DFSClient client = new DFSClient(new InetSocketAddress("localhost",
             cluster.getNameNodePort()), cluster.getConfiguration(0));
 
-    String localFilename = "/local.txt";
-    test.createFile(new Path(localFilename), (short) 1, baseFileLen, baseFileLen);
+    timeGetLocatedBlocks(client, "/"+filename, 1);
 
-    String resultFile = "benchmarkReplication-" + new Date().getTime() + ".txt";
-    BufferedWriter writer = new BufferedWriter(new FileWriter(new File(RESULTS_DIR, resultFile), true));
-    int tries = 10;
-    writer.write(timeGetLocatedBlocks(client, localFilename, tries));
-    writer.write(timeGetLocatedBlocks(client, "/"+remoteFilename, tries));
-    writer.close();
-
-
-//    List<LocatedBlock> locatedBlocks = client.getLocatedBlocks(baseDir + filename, 0, baseFileLen).getLocatedBlocks();
-//    ArrayList<DataNode> dns = cluster.getDataNodes();
-
-  /*  int tries = 1;
-    for (int i = 0; i < locatedBlocks.size(); i++) {
-      LocatedBlock block = locatedBlocks.get(i);
-      StorageType[] storageTypes = block.getStorageTypes();
-      DatanodeInfo[] infos = block.getLocations();
-
-      for (int j = 0; j < infos.length; j++) {
-        DatanodeInfoWithStorage dn = (DatanodeInfoWithStorage) infos[j];
-        if(dn.getStorageType().equals(StorageType.PROVIDED)) {
-          DFSInputStream inputStream = client.open(filename);
-          //inputStream.read
-        }
-      }
-      if (storageTypes[i].equals(StorageType.PROVIDED)) {
-
-      }
-      Assert.assertNotNull(locatedBlocks);
-    }*/
-   // String read = test.readFromFile(cluster.getFileSystem(), "/" + filename);
-   // Assert.assertEquals(toWrite, read);
   }
 
+  // GABRIEL - get located blocks only goes to NDB so this test is stupid
   private String timeGetLocatedBlocks(DFSClient client, String filename, int tries) throws IOException {
     long totTime = 0;
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < tries; i++) {
+      LOG.info("----------------------------start run "+i+"------------------------------------");
       long startTime = System.currentTimeMillis();
       LocatedBlocks locatedBlocks = client.getLocatedBlocks(filename, 0, filename.length());
       long endTime = System.currentTimeMillis() - startTime;
       totTime += endTime;
 
+      LOG.info("----------------------------finish run "+i+"------------------------------------");
+      // sb.append(endTime +"\n");
       sb.append("read ").append(filename).append(" from ").append(locatedBlocks.get(0).getLocations()[0].getDatanodeUuid())
-              .append(Arrays.toString(locatedBlocks.get(0).getLocations())).append("\n");
-      sb.append("run ").append(i).append(" took ").append(endTime).append(" ms").append("\n");
+              .append(Arrays.toString(locatedBlocks.get(0).getLocations())).append("\n")
+              .append("run ").append(i).append(" took ").append(endTime).append(" ms").append("\n");
+      LOG.info(sb.toString());
     }
     sb.append(filename).append(" avg ms time of ").append(tries).append(" tries : ").append(totTime / tries).append("\n").append("\n");
     LOG.info(sb.toString());
